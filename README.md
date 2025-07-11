@@ -51,8 +51,8 @@ The application is composed of four main components:
 
 When you run the application and click "Calculate", the main screen will display the following analysis:
 
-![Dashboard Screenshot](./screenshots/ss1.png)
-![Dashboard Screenshot](./screenshots/ss2.png)
+![Dashboard Screenshot](./screenshots/ss_1.png)
+![Dashboard Screenshot](./screenshots/ss_2.png)
 
 * **Portfolio Value:** Metrics showing the current and new portfolio's total market value, with the change clearly indicated.
 * **Value at Risk (VaR):** The core result. It displays the current and new VaR, highlighting the change. This is the primary indicator of the trade's impact on risk.
