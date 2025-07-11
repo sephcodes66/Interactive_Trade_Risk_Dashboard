@@ -29,11 +29,9 @@ def main():
     Main function to run the Streamlit application.
     """
     st.set_page_config(layout="wide")
-    html.H1(children='Interactive_Trade_Risk_Dashboard'),
+    st.title('Interactive_Trade_Risk_Dashboard')
 
-    html.Div(children='''
-        An Interactive Trade and Risk Dashboard
-    '''),
+    st.write('An Interactive Trade and Risk Dashboard')
 
     # --- Sidebar for User Input ---
     st.sidebar.header("Portfolio & Trade Input")
