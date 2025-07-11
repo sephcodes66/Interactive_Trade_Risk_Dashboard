@@ -16,7 +16,7 @@ This project was built to demonstrate a full-stack data application, showcasing 
 
 ## The Core Problem: Pre-Trade Risk
 
-In financial markets, every trade carries risk. Before executing a new trade, a portfolio manager must ask a critical question: **"How will this trade affect my portfolio's overall risk?"** Adding a new position could either increase risk concentration, or it could potentially decrease it through diversification. Answering this question manually is slow and complex. This dashboard aims to solve this by providing an instant, data-driven answer.
+In financial markets, every trade carries risk. Before executing a new trade, a portfolio manager must ask a critical question: **"How will this trade affect my portfolio's overall risk?"** Adding a new position could either increase risk concentration, or it could potentially decrease it through diversification. Answering this question manually is slow and complex. This dashboard aims to solve this by providing an instant, data-driven answer. 
 
 ## The Solution: Value at Risk (VaR)
 
