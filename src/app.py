@@ -29,7 +29,11 @@ def main():
     Main function to run the Streamlit application.
     """
     st.set_page_config(layout="wide")
-    st.title("RITA - Pre-Trade Risk Analysis Prototype")
+    html.H1(children='Interactive_Trade_Risk_Dashboard'),
+
+    html.Div(children='''
+        An Interactive Trade and Risk Dashboard
+    '''),
 
     # --- Sidebar for User Input ---
     st.sidebar.header("Portfolio & Trade Input")
