@@ -1,11 +1,13 @@
 import pandas as pd
 import numpy as np
-from sqlalchemy import text
+from sqlalchemy import func
+from sqlalchemy.orm import sessionmaker
 from db_connector import get_engine
+from src.models import Instrument, MarketData
 
 class RiskEngine:
     """
-    Calculates financial risk metrics for a given portfolio.
+    Calculates financial risk metrics for a given portfolio using the SQLAlchemy ORM.
     """
     def __init__(self, portfolio_manager):
         """
@@ -13,43 +15,55 @@ class RiskEngine:
         """
         self.portfolio_manager = portfolio_manager
         self.engine = get_engine()
+        self.Session = sessionmaker(bind=self.engine)
 
     def get_historical_data(self, days: int = 252) -> pd.DataFrame:
         """
         Fetches the last 'n' days of historical price data for all tickers
-        in the portfolio.
+        in the portfolio using an ORM query.
         """
         tickers = list(self.portfolio_manager.portfolio.keys())
         if not tickers:
             return pd.DataFrame()
 
-        query = text("""
-            WITH ranked_prices AS (
-                SELECT
-                    i.ticker,
-                    m.price_date,
-                    m.close_price,
-                    ROW_NUMBER() OVER(PARTITION BY i.ticker ORDER BY m.price_date DESC) as rn
-                FROM instruments i
-                JOIN market_data m ON i.instrument_id = m.instrument_id
-                WHERE i.ticker IN :tickers
-            )
-            SELECT ticker, price_date, close_price
-            FROM ranked_prices
-            WHERE rn <= :days
-            ORDER BY price_date ASC;
-        """)
+        session = self.Session()
+        try:
+            # Subquery to rank the dates for each instrument
+            ranked_prices_subquery = session.query(
+                Instrument.ticker,
+                MarketData.price_date,
+                MarketData.close_price,
+                func.row_number().over(
+                    partition_by=Instrument.ticker,
+                    order_by=MarketData.price_date.desc()
+                ).label('rn')
+            ).join(
+                MarketData,
+                Instrument.instrument_id == MarketData.instrument_id
+            ).filter(
+                Instrument.ticker.in_(tickers)
+            ).subquery()
 
-        with self.engine.connect() as conn:
-            df = pd.read_sql(query, conn, params={"tickers": tuple(tickers), "days": days})
+            # Main query to select the top 'n' days
+            query = session.query(
+                ranked_prices_subquery.c.ticker,
+                ranked_prices_subquery.c.price_date,
+                ranked_prices_subquery.c.close_price
+            ).filter(
+                ranked_prices_subquery.c.rn <= days
+            ).order_by(
+                ranked_prices_subquery.c.price_date.asc()
+            )
+            
+            df = pd.read_sql(query.statement, session.bind)
+
+        finally:
+            session.close()
 
         if df.empty:
             return pd.DataFrame()
             
         historical_prices_pivot = df.pivot(index='price_date', columns='ticker', values='close_price')
-        
-        # Drop columns that are all NaN, which can happen if a ticker has no price data.
-        # This prevents calculation errors downstream.
         historical_prices_pivot.dropna(axis='columns', how='all', inplace=True)
         
         return historical_prices_pivot
@@ -68,9 +82,6 @@ class RiskEngine:
     def calculate_historical_var(self, confidence_level: float = 0.95, days: int = 252) -> tuple:
         """
         Calculates the historical Value at Risk (VaR) for the portfolio.
-
-        Returns:
-            A tuple containing: (var_value, simulated_pl, historical_prices)
         """
         total_market_value = self.portfolio_manager.calculate_total_market_value()
         if total_market_value == 0:
@@ -80,17 +91,14 @@ class RiskEngine:
         if historical_prices.empty:
             return 0.0, np.array([]), pd.DataFrame()
 
-        # Calculate weights for each stock to properly attribute returns.
         weights = pd.Series(self.portfolio_manager.market_values) / total_market_value
         aligned_weights = weights.reindex(historical_prices.columns, fill_value=0)
             
         daily_returns = historical_prices.pct_change(fill_method=None).dropna()
 
-        # If there's not enough data to calculate returns, exit gracefully.
         if daily_returns.empty:
             return 0.0, np.array([]), historical_prices
 
-        # Calculate weighted portfolio returns and simulated Profit/Loss.
         portfolio_returns = (daily_returns * aligned_weights).sum(axis=1)
         simulated_pl = total_market_value * portfolio_returns
 

@@ -103,6 +103,16 @@ python -m src.automate_report
 
 This will create a Markdown file at `reports/daily_risk_report.md` containing a summary of the analysis. This script can be scheduled to run automatically using tools like `cron`.
 
+## Development Highlights & Challenges
+
+This project, while a prototype, involved overcoming several real-world software engineering challenges that highlight a practical and problem-solving approach to development:
+
+*   **Solved Critical Data Serialization Bug:** A recurring `500 Internal Server Error` was traced to a subtle issue where numeric data types from the backend's `pandas` and `numpy` libraries were not compatible with the frontend's JSON parser. The solution involved implementing a robust data sanitization layer in the API to ensure all outgoing data was converted to "JSON-safe" types, making the application stable and reliable.
+
+*   **Refactored Core Logic to ORM:** The initial version of the application used raw SQL queries embedded in the Python code. To improve maintainability and code quality, the entire data access layer was refactored to use the SQLAlchemy ORM. This involved creating new data models, rewriting all queries using the ORM's syntax, and overhauling the test suite with new mocks to verify the new architecture.
+
+*   **Designed an Interactive and Resilient UI:** The dashboard was redesigned from a static JSON input to a fully interactive portfolio builder. When this introduced callback errors for certain data inputs, the dashboard's rendering logic was hardened to gracefully handle missing or null data, ensuring a smooth user experience without crashes.
+
 ## Setup and Installation
 
 ### Prerequisites
