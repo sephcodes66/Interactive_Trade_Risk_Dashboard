@@ -3,15 +3,16 @@ from db_connector import get_engine
 
 class PortfolioManager:
     """
-    Manages a simulated portfolio of stocks.
+    Manages a portfolio of stocks, including fetching current prices
+    and calculating market value.
     """
     def __init__(self, portfolio_dict: dict):
         """
-        Initializes the PortfolioManager with a portfolio.
+        Initializes the PortfolioManager.
 
         Args:
-            portfolio_dict (dict): A dictionary representing the portfolio,
-                                 e.g., {'AAPL': 50, 'GOOG': 30}
+            portfolio_dict: A dictionary representing the portfolio,
+                            e.g., {'AAPL': 50, 'GOOG': 30}
         """
         if not isinstance(portfolio_dict, dict):
             raise TypeError("Portfolio must be a dictionary of ticker symbols and quantities.")
@@ -22,17 +23,13 @@ class PortfolioManager:
     def get_current_prices(self) -> dict:
         """
         Fetches the most recent price for each ticker in the portfolio.
-
-        Returns:
-            dict: A dictionary mapping each ticker to its most recent close price.
         """
         prices = {}
         tickers = list(self.portfolio.keys())
         if not tickers:
             return prices
 
-        # This SQL query finds the latest price for each requested ticker
-        # It's more efficient to do this in one query than one query per ticker.
+        # This single query is more efficient than one query per ticker.
         query = text("""
             SELECT i.ticker, m.close_price
             FROM instruments i
@@ -50,7 +47,7 @@ class PortfolioManager:
             for row in result:
                 prices[row[0]] = row[1]
         
-        # Check for any tickers that were not found in the database
+        # Warn about any tickers that were not found in the database.
         for ticker in tickers:
             if ticker not in prices:
                 print(f"Warning: Could not find price data for ticker '{ticker}'. It will be ignored.")
@@ -60,9 +57,6 @@ class PortfolioManager:
     def calculate_total_market_value(self) -> float:
         """
         Calculates the total market value of the portfolio.
-
-        Returns:
-            float: The total market value.
         """
         current_prices = self.get_current_prices()
         total_value = 0.0
@@ -75,22 +69,3 @@ class PortfolioManager:
                 total_value += value
         
         return total_value
-
-if __name__ == '__main__':
-    # Example Usage
-    # Define a sample portfolio
-    sample_portfolio = {'AAPL': 10, 'MSFT': 20, 'TSLA': 5, 'INVALID': 100}
-    
-    print(f"Initializing portfolio: {sample_portfolio}")
-    
-    # Create a PortfolioManager instance
-    manager = PortfolioManager(sample_portfolio)
-    
-    # Calculate and print the total market value
-    total_value = manager.calculate_total_market_value()
-    
-    print("\nCalculating market values...")
-    for ticker, value in manager.market_values.items():
-        print(f"  - {ticker}: ${value:,.2f}")
-        
-    print(f"\nTotal Portfolio Market Value: ${total_value:,.2f}")

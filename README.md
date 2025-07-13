@@ -1,63 +1,108 @@
-# Interactive_Trade_Risk_Dashboard
+# RiskDash: An Interactive Risk Analysis Tool
 
-The `Interactive_Trade_Risk_Dashboard` is a functional prototype of a pre-trade risk analysis system. It is designed to provide traders and portfolio managers with a quick, interactive tool to assess the impact of a potential trade on their portfolio's overall risk profile, quantified by the financial metric **Value at Risk (VaR)**.
+RiskDash is a prototype of a financial risk management system. It provides a suite of tools to help risk analysts and portfolio managers assess the market risk of equity portfolios using **Value at Risk (VaR)**.
 
-This project was built to demonstrate a full-stack data application, showcasing skills in Python, data engineering, backend development, financial modeling, and interactive data visualization.
+This enhanced version of the project demonstrates a full-stack data application with a clear separation of concerns, featuring a backend API, an interactive web dashboard, and an automated reporting script.
 
 ## Table of Contents
-- [The Core Problem: Pre-Trade Risk](#the-core-problem-pre-trade-risk)
-- [The Solution: Value at Risk (VaR)](#the-solution-value-at-risk-var)
 - [System Architecture](#system-architecture)
 - [Features](#features)
-- [Application Output](#application-output)
+- [How to Use RiskDash](#how-to-use-riskdash)
+  - [1. The REST API](#1-the-rest-api)
+  - [2. The Interactive Dashboard](#2-the-interactive-dashboard)
+  - [3. Automated Daily Reporting](#3-automated-daily-reporting)
 - [Setup and Installation](#setup-and-installation)
-- [Running the Application](#running-the-application)
 - [Code Quality: Linting and Testing](#code-quality-linting-and-testing)
-
-## The Core Problem: Pre-Trade Risk
-
-In financial markets, every trade carries risk. Before executing a new trade, a portfolio manager must ask a critical question: **"How will this trade affect my portfolio's overall risk?"** Adding a new position could either increase risk concentration, or it could potentially decrease it through diversification. Answering this question manually is slow and complex. This dashboard aims to solve this by providing an instant, data-driven answer. 
-
-## The Solution: Value at Risk (VaR)
-
-To quantify this risk, we use **Value at Risk (VaR)**. VaR is a statistical measure that estimates the potential loss a portfolio could suffer over a specific time horizon, at a given confidence level.
-
-For example, a 1-day 95% VaR of **$10,000** means that we are 95% confident that the portfolio will not lose more than $10,000 in the next trading day.
-
-This project uses the **Historical Simulation Method** to calculate VaR. This method involves looking at how the current portfolio would have performed on each of the last *N* trading days (e.g., 252 days, or one trading year) to simulate a distribution of potential profits and losses. The VaR is then calculated from the 5th percentile of this distribution.
 
 ## System Architecture
 
-The application is composed of four main components:
+The application is now composed of several decoupled components:
 
-1.  **Data Ingestion Pipeline (`ingest_data.py`):** A script that sources historical stock and ETF price data from CSV files, processes it, and loads it into a structured PostgreSQL database.
-2.  **PostgreSQL Database:** A relational database that stores the clean data in two main tables: `instruments` (for ticker information) and `market_data` (for daily price history).
-3.  **Backend Risk Engine (`portfolio.py`, `risk_engine.py`):** The core Python logic.
-    * `PortfolioManager`: A class to manage portfolio holdings and calculate their current market value.
-    * `RiskEngine`: A class that fetches historical data from the database and implements the VaR calculation.
-4.  **Interactive Frontend (`app.py`):** A web application built with **Streamlit** that provides a user interface for inputting trades, triggering the analysis, and visualizing the results in a clear and intuitive way.
+1.  **Data Ingestion Pipeline (`ingest_data.py`):** A script that sources historical stock price data from CSV files and loads it into a PostgreSQL database.
+2.  **PostgreSQL Database:** Stores clean `instruments` and `market_data` information.
+3.  **Backend Risk Engine (`portfolio.py`, `risk_engine.py`):** The core Python logic for managing portfolios and calculating historical VaR.
+4.  **Flask REST API (`app.py`):** A robust API built with **Flask** that exposes the risk engine's functionality over HTTP, making it available to any client.
+5.  **Interactive Dashboard (`app.py`):** A web application built with **Dash** and **Plotly**. It acts as a client to the Flask API to provide an interactive user interface for risk analysis.
+6.  **Automation Script (`automate_report.py`):** A standalone script for generating scheduled, automated risk reports.
+
+![System Diagram](https://i.imgur.com/9yZ0A4R.png) 
 
 ## Features
 
-* **Dynamic Data Ingestion:** Loads and processes over 150 different stock and ETF data files.
-* **Robust Backend:** Object-oriented Python code for managing portfolios and calculating risk.
+* **Decoupled API-First Design:** Core logic is exposed via a REST API for system integration.
+* **Interactive Web Dashboard:** A user-friendly interface for ad-hoc risk analysis and visualization.
+* **Automated Reporting:** Scriptable, automated generation of daily risk reports.
 * **Historical VaR Calculation:** Implements the industry-standard historical simulation method for VaR.
-* **Interactive UI:** Allows users to define a hypothetical trade and see its impact instantly.
-* **Clear Go/No-Go Signal:** Provides a simple, color-coded recommendation based on whether the trade increases VaR beyond a set tolerance.
-* **Rich Data Visualization:** Includes interactive histograms of the simulated Profit/Loss distributions for both the current and proposed portfolios.
-* **Quality Assured:** The codebase includes a suite of unit tests (`pytest`) and is formatted with a linter (`ruff`).
+* **Rich Data Visualization:** Includes interactive pie charts of portfolio composition.
+* **Quality Assured:** The codebase includes a comprehensive suite of unit tests (`pytest`) and is formatted with a linter (`ruff`).
 
-## Application Output
+## How to Use RiskDash
 
-When you run the application and click "Calculate", the main screen will display the following analysis:
+There are three primary ways to use the RiskDash prototype.
+
+### 1. The REST API
+
+The Flask API is the core of the system. You can interact with it directly to get programmatic access to the risk engine.
+
+**To run the API server:**
+```bash
+flask run
+```
+The API will be available at `http://127.0.0.1:5000`.
+
+**Endpoint:** `POST /api/risk`
+
+This endpoint accepts a JSON payload with a portfolio and returns the calculated risk metrics.
+
+**Example Request (`curl`):**
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"portfolio": {"AAPL": 10, "MSFT": 20, "TSLA": 5}}' \
+  http://127.0.0.1:5000/api/risk
+```
+
+**Example Success Response:**
+```json
+{
+  "market_values_per_stock": {
+    "AAPL": 2143.5,
+    "MSFT": 5930.2,
+    "TSLA": 893.5
+  },
+  "total_market_value": 8967.2,
+  "var": 253.81
+}
+```
+
+### 2. The Interactive Dashboard
+
+The dashboard provides a user-friendly, graphical interface for the API.
+
+**To run the dashboard:**
+```bash
+python src.app
+```
+The dashboard will be available at `http://127.0.0.1:8050/dash/`.
+
+**How to use it:**
+1.  Select one or more stocks from the searchable dropdown.
+2.  Enter the quantity for each selected stock.
+3.  Click the "Analyze Portfolio" button.
+4.  The dashboard will call the API and display the risk analysis, including the VaR, a risk concentration pie chart, and a smoothed density plot of potential profit and loss outcomes.
 
 ![Dashboard Screenshot](./screenshots/ss_1.png)
-![Dashboard Screenshot](./screenshots/ss_2.png)
 
-* **Portfolio Value:** Metrics showing the current and new portfolio's total market value, with the change clearly indicated.
-* **Value at Risk (VaR):** The core result. It displays the current and new VaR, highlighting the change. This is the primary indicator of the trade's impact on risk.
-* **Recommendation:** A clear "Go" or "No-Go" message. The logic is based on whether the new VaR is lower than the current VaR, or if the increase is within a 10% tolerance.
-* **Simulated P/L Distribution:** Two histograms that visually represent the risk. A wider distribution implies higher risk. You can visually compare the risk profiles of the portfolio before and after the proposed trade.
+### 3. Automated Daily Reporting
+
+The automation script generates a daily risk report for a pre-defined sample portfolio.
+
+**To run the script:**
+```bash
+python -m src.automate_report
+```
+
+This will create a Markdown file at `reports/daily_risk_report.md` containing a summary of the analysis. This script can be scheduled to run automatically using tools like `cron`.
 
 ## Setup and Installation
 
@@ -69,7 +114,7 @@ When you run the application and click "Calculate", the main screen will display
 1.  **Clone the repository:**
     ```bash
     git clone <your-repo-url>
-    cd Interactive_Trade_Risk_Dashboard # IMPORTANT: Ensure this matches your actual repository name after renaming
+    cd <your-repo-directory>
     ```
 
 2.  **Create and activate a virtual environment:**
@@ -83,31 +128,24 @@ When you run the application and click "Calculate", the main screen will display
     pip install -r requirements.txt
     ```
 
-4.  **Install the project in editable mode (for testing):**
-    ```bash
-    pip install -e .
-    ```
+4.  **Set up the database:**
+    * Connect to PostgreSQL and create a new database (e.g., `risk_dash_db`).
+    * Create a `.env` file in the project root by copying the example: `cp .env.example .env`.
+    * Edit the `.env` file with your database credentials.
 
-5.  **Set up the database:**
-    * Connect to PostgreSQL and create a new database.
-        ```sql
-        CREATE DATABASE trade_risk_db; # Renamed from rita_risk_db1 for consistency
-        ```
-    * Create a `.env` file in the project root by copying the example:
-        ```bash
-        cp .env.example .env
-        ```
-        *(Note: You may need to create the `.env.example` file first if it doesn't exist)*
-    * Edit the `.env` file with your database credentials (user, password, host, port, and the database name `trade_risk_db`).
-
-6.  **Run the data ingestion script:**
+5.  **Run the data ingestion script:**
     This will populate your database with the required historical data.
     ```bash
     python src/ingest_data.py
     ```
 
-## Running the Application
+## Code Quality: Linting and Testing
 
-To launch the interactive web application, run:
-```bash
-streamlit run src/app.py
+*   **To run the linter (Ruff):**
+    ```bash
+    ruff check .
+    ```
+*   **To run the unit tests (Pytest):**
+    ```bash
+    pytest
+    ```

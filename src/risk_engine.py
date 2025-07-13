@@ -5,15 +5,11 @@ from db_connector import get_engine
 
 class RiskEngine:
     """
-    Calculates the Value at Risk (VaR) for a given portfolio.
+    Calculates financial risk metrics for a given portfolio.
     """
     def __init__(self, portfolio_manager):
         """
         Initializes the RiskEngine.
-
-        Args:
-            portfolio_manager (PortfolioManager): An instance of the portfolio manager
-                                                  containing the portfolio to be analyzed.
         """
         self.portfolio_manager = portfolio_manager
         self.engine = get_engine()
@@ -22,13 +18,6 @@ class RiskEngine:
         """
         Fetches the last 'n' days of historical price data for all tickers
         in the portfolio.
-
-        Args:
-            days (int): The number of historical days to fetch. Defaults to 252 (one trading year).
-
-        Returns:
-            pd.DataFrame: A DataFrame with historical price data, pivoted by ticker.
-                          Returns an empty DataFrame if no data is found.
         """
         tickers = list(self.portfolio_manager.portfolio.keys())
         if not tickers:
@@ -57,70 +46,55 @@ class RiskEngine:
         if df.empty:
             return pd.DataFrame()
             
-        # Pivot the table to have dates as index and tickers as columns
         historical_prices_pivot = df.pivot(index='price_date', columns='ticker', values='close_price')
+        
+        # Drop columns that are all NaN, which can happen if a ticker has no price data.
+        # This prevents calculation errors downstream.
+        historical_prices_pivot.dropna(axis='columns', how='all', inplace=True)
+        
         return historical_prices_pivot
+
+    def calculate_historical_performance(self, historical_prices: pd.DataFrame) -> pd.Series:
+        """
+        Calculates the daily market value of the portfolio over a historical period.
+        """
+        quantities = pd.Series(self.portfolio_manager.portfolio)
+        aligned_quantities = quantities.reindex(historical_prices.columns, fill_value=0)
+        daily_values = historical_prices * aligned_quantities
+        portfolio_performance = daily_values.sum(axis=1)
+        
+        return portfolio_performance
 
     def calculate_historical_var(self, confidence_level: float = 0.95, days: int = 252) -> tuple:
         """
         Calculates the historical Value at Risk (VaR) for the portfolio.
 
-        Args:
-            confidence_level (float): The confidence level for the VaR calculation (e.g., 0.95 for 95%).
-            days (int): The number of historical days to use for the calculation.
-
         Returns:
-            tuple: A tuple containing:
-                   - var_value (float): The calculated VaR in currency.
-                   - simulated_pl (np.array): The array of simulated Profit/Loss values.
+            A tuple containing: (var_value, simulated_pl, historical_prices)
         """
-        # 1. Get the total market value of the current portfolio
         total_market_value = self.portfolio_manager.calculate_total_market_value()
         if total_market_value == 0:
-            return 0.0, np.array([])
+            return 0.0, np.array([]), pd.DataFrame()
 
-        # 2. Get historical price data
         historical_prices = self.get_historical_data(days=days)
         if historical_prices.empty:
-            print("Warning: Could not retrieve historical data for VaR calculation.")
-            return 0.0, np.array([])
+            return 0.0, np.array([]), pd.DataFrame()
+
+        # Calculate weights for each stock to properly attribute returns.
+        weights = pd.Series(self.portfolio_manager.market_values) / total_market_value
+        aligned_weights = weights.reindex(historical_prices.columns, fill_value=0)
             
-        # 3. Calculate daily percentage returns
-        daily_returns = historical_prices.pct_change().dropna()
+        daily_returns = historical_prices.pct_change(fill_method=None).dropna()
 
-        # 4. Simulate daily Profit/Loss (P/L)
-        # Apply historical returns to the current portfolio's total value
-        simulated_pl = total_market_value * daily_returns.sum(axis=1)
+        # If there's not enough data to calculate returns, exit gracefully.
+        if daily_returns.empty:
+            return 0.0, np.array([]), historical_prices
 
-        # 5. Find the percentile for VaR
-        # The VaR is the q-th percentile of the simulated P/L distribution.
-        # For a 95% confidence level, we look at the 5th percentile (1 - 0.95).
+        # Calculate weighted portfolio returns and simulated Profit/Loss.
+        portfolio_returns = (daily_returns * aligned_weights).sum(axis=1)
+        simulated_pl = total_market_value * portfolio_returns
+
         var_percentile = 1 - confidence_level
         var_value = -np.percentile(simulated_pl, var_percentile * 100)
 
-        return var_value, simulated_pl.to_numpy()
-
-
-if __name__ == '__main__':
-    from portfolio import PortfolioManager
-
-    # Example Usage
-    sample_portfolio = {'AAPL': 10, 'MSFT': 20, 'TSLA': 5}
-    print(f"Analyzing portfolio: {sample_portfolio}")
-
-    # 1. Create a PortfolioManager
-    pm = PortfolioManager(sample_portfolio)
-
-    # 2. Create a RiskEngine
-    risk_engine = RiskEngine(pm)
-
-    # 3. Calculate VaR
-    var_95, p_and_l = risk_engine.calculate_historical_var()
-
-    print(f"\nPortfolio Total Value: ${pm.calculate_total_market_value():,.2f}")
-    if var_95 is not None:
-        print(f"95% Historical VaR (1-day): ${var_95:,.2f}")
-        print(f"This means we are 95% confident the portfolio will not lose more than ${var_95:,.2f} in one day.")
-    
-    if p_and_l.size > 0:
-        print(f"\nSimulated P/L distribution (first 5): {p_and_l[:5]}")
+        return var_value, simulated_pl.to_numpy(), historical_prices

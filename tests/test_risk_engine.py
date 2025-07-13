@@ -10,6 +10,7 @@ def mock_portfolio_manager(mocker):
     # Mock the PortfolioManager instance
     mock_pm = mocker.MagicMock(spec=PortfolioManager)
     mock_pm.portfolio = {'AAPL': 10, 'GOOG': 2}
+    mock_pm.market_values = {'AAPL': 80000.0, 'GOOG': 20000.0}
     # Mock the method that hits the database
     mock_pm.calculate_total_market_value.return_value = 100000.0 
     return mock_pm
@@ -19,7 +20,8 @@ def mock_db_engine_for_risk(mocker):
     """Fixture to mock the database engine for the RiskEngine tests."""
     # This mock is for the get_historical_data method in RiskEngine
     mock_engine = mocker.patch('risk_engine.get_engine')
-    mock_connection = mock_engine.return_value.connect.return_value.__enter__.return_value
+    # The connection is used as a context manager, so we mock its entry
+    mock_engine.return_value.connect.return_value.__enter__.return_value
     
     # Create a sample historical data DataFrame
     data = {
@@ -52,7 +54,7 @@ def test_get_historical_data(mock_portfolio_manager, mock_db_engine_for_risk):
 def test_calculate_historical_var(mock_portfolio_manager, mock_db_engine_for_risk, mocker):
     """Test the main VaR calculation logic."""
     re = RiskEngine(mock_portfolio_manager)
-    var_value, simulated_pl = re.calculate_historical_var()
+    var_value, simulated_pl, hist_prices = re.calculate_historical_var()
 
     # --- Manual VaR Calculation for Verification ---
     # Total Value = 100,000
@@ -73,6 +75,7 @@ def test_calculate_historical_var(mock_portfolio_manager, mock_db_engine_for_ris
     assert simulated_pl.shape[0] == 2 # 2 days of returns
     assert var_value is not None
     assert isinstance(var_value, float)
+    assert not hist_prices.empty
     
     # With a known P/L array, we can test the percentile calculation
     re.get_historical_data = mocker.MagicMock() # further mock to isolate the percentile calc

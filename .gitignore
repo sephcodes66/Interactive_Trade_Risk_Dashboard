@@ -50,6 +50,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+.ruff_cache/
 
 # Translations
 *.mo
@@ -144,3 +145,6 @@ cython_debug/
 *.swp
 *~
 .fuse*
+
+# Generated reports
+reports/

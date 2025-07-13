@@ -1,10 +1,10 @@
 import os
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 def get_engine():
     """
-    Creates and returns a SQLAlchemy engine configured from environment variables.
+    Creates and returns a SQLAlchemy engine configured from .env variables.
     """
     load_dotenv()
     
@@ -17,17 +17,25 @@ def get_engine():
     if not all([db_user, db_host, db_port, db_name]):
         raise ValueError("Database credentials are not fully set in the .env file.")
 
-    # The f-string correctly handles the case where db_password might be empty or None
     connection_string = f'postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
     
     return create_engine(connection_string)
 
-if __name__ == '__main__':
-    # Example of how to use it and test the connection
+def get_all_tickers() -> list:
+    """
+    Fetches a sorted list of all unique ticker symbols from the database.
+    """
+    engine = get_engine()
+    query = text("SELECT DISTINCT ticker FROM instruments ORDER BY ticker ASC;")
+    
+    tickers = []
     try:
-        engine = get_engine()
-        with engine.connect() as connection:
-            print("Successfully connected to the database!")
-        engine.dispose()
+        with engine.connect() as conn:
+            result = conn.execute(query).fetchall()
+            tickers = [row[0] for row in result]
     except Exception as e:
-        print(f"Failed to connect to the database: {e}")
+        print(f"Error fetching tickers: {e}")
+        # Provide a fallback list to ensure the dashboard can always start.
+        return ['AAPL', 'GOOG', 'MSFT', 'TSLA', 'VTI', 'AGG'] 
+        
+    return tickers

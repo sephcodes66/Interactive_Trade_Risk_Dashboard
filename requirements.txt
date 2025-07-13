@@ -7,3 +7,8 @@ SQLAlchemy
 pytest
 pytest-mock
 ruff
+Flask
+requests
+dash
+werkzeug
+scipy
