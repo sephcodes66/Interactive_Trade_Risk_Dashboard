@@ -4,7 +4,7 @@ This document outlines the database schema for the RiskDash application and prov
 
 ## Schema Definition (DDL)
 
-The following `CREATE TABLE` statements define the structure of the PostgreSQL database.
+The following `CREATE TABLE` statements define the structure of the PostgreSQL database. Indexes are created on foreign keys and frequently filtered columns to ensure query performance.
 
 ```sql
 CREATE TABLE instruments (
@@ -24,6 +24,10 @@ CREATE TABLE market_data (
     volume NUMERIC,
     UNIQUE(instrument_id, price_date)
 );
+
+-- Create indexes for performance optimization
+CREATE INDEX IF NOT EXISTS idx_market_data_instrument_id ON market_data (instrument_id);
+CREATE INDEX IF NOT EXISTS idx_market_data_price_date ON market_data (price_date);
 ```
 
 ---

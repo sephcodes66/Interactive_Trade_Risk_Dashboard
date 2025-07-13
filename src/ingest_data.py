@@ -5,7 +5,10 @@ from sqlalchemy import create_engine, text
 import glob
 
 def create_tables(engine):
-    """Creates the database tables if they do not already exist."""
+    """
+    Creates the database tables and indexes if they do not already exist.
+    Indexes are crucial for query performance on large datasets.
+    """
     with engine.connect() as conn:
         with conn.begin(): # Start a transaction
             conn.execute(text("""
@@ -28,7 +31,10 @@ def create_tables(engine):
                 UNIQUE(instrument_id, price_date)
             );
             """))
-    print("Tables checked/created successfully.")
+            # Add indexes to foreign keys and frequently queried columns for performance.
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_market_data_instrument_id ON market_data (instrument_id);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_market_data_price_date ON market_data (price_date);"))
+    print("Tables and indexes checked/created successfully.")
 
 def ingest_data(engine):
     """
