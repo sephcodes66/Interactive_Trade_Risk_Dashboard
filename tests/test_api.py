@@ -27,16 +27,7 @@ def test_calculate_risk_success(mock_risk_engine, mock_portfolio_manager, client
 
     # Mock RiskEngine instance
     mock_re_instance = MagicMock()
-    # Mock the return value of calculate_historical_var
-    mock_hist_prices = pd.DataFrame({'AAPL': [100, 101], 'GOOG': [200, 198]})
-    mock_re_instance.calculate_historical_var.return_value = (5000.0, np.array([100, -200]), mock_hist_prices)
-    # Mock the return value of calculate_historical_performance
-    performance_series = pd.Series(
-        [15000, 14900], 
-        index=pd.to_datetime(['2023-01-01', '2023-01-02'], utc=True),
-        name="value"
-    )
-    mock_re_instance.calculate_historical_performance.return_value = performance_series
+    mock_re_instance.calculate_historical_var.return_value = (5000.0, np.array([100, -200]))
     mock_risk_engine.return_value = mock_re_instance
 
     # Act: Make the API call
@@ -51,14 +42,12 @@ def test_calculate_risk_success(mock_risk_engine, mock_portfolio_manager, client
     assert data['total_market_value'] == 100000.0
     assert data['var'] == 5000.0
     assert data['simulated_pl'] == [100, -200]
-    assert 'historical_performance' in data
 
     # Assert that the mocks were called correctly
     mock_portfolio_manager.assert_called_once_with(payload['portfolio'])
     mock_risk_engine.assert_called_once_with(mock_pm_instance)
     mock_pm_instance.calculate_total_market_value.assert_called_once()
     mock_re_instance.calculate_historical_var.assert_called_once_with()
-    mock_re_instance.calculate_historical_performance.assert_called_once()
 
 def test_calculate_risk_invalid_input(client):
     """

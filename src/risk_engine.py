@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from sqlalchemy import func
 from sqlalchemy.orm import sessionmaker
-from db_connector import get_engine
+from src import get_engine
 from src.models import Instrument, MarketData
 
 class RiskEngine:
@@ -64,20 +64,15 @@ class RiskEngine:
             return pd.DataFrame()
             
         historical_prices_pivot = df.pivot(index='price_date', columns='ticker', values='close_price')
+        
+        # Forward-fill missing values to handle non-trading days or data gaps.
+        # This is a standard practice and more robust than dropping columns.
+        historical_prices_pivot.ffill(inplace=True)
+        
+        # Drop any remaining NaN columns (only if a stock has no data at all).
         historical_prices_pivot.dropna(axis='columns', how='all', inplace=True)
         
         return historical_prices_pivot
-
-    def calculate_historical_performance(self, historical_prices: pd.DataFrame) -> pd.Series:
-        """
-        Calculates the daily market value of the portfolio over a historical period.
-        """
-        quantities = pd.Series(self.portfolio_manager.portfolio)
-        aligned_quantities = quantities.reindex(historical_prices.columns, fill_value=0)
-        daily_values = historical_prices * aligned_quantities
-        portfolio_performance = daily_values.sum(axis=1)
-        
-        return portfolio_performance
 
     def calculate_historical_var(self, confidence_level: float = 0.95, days: int = 252) -> tuple:
         """
@@ -85,11 +80,11 @@ class RiskEngine:
         """
         total_market_value = self.portfolio_manager.calculate_total_market_value()
         if total_market_value == 0:
-            return 0.0, np.array([]), pd.DataFrame()
+            return 0.0, np.array([])
 
         historical_prices = self.get_historical_data(days=days)
         if historical_prices.empty:
-            return 0.0, np.array([]), pd.DataFrame()
+            return 0.0, np.array([])
 
         weights = pd.Series(self.portfolio_manager.market_values) / total_market_value
         aligned_weights = weights.reindex(historical_prices.columns, fill_value=0)
@@ -97,7 +92,7 @@ class RiskEngine:
         daily_returns = historical_prices.pct_change(fill_method=None).dropna()
 
         if daily_returns.empty:
-            return 0.0, np.array([]), historical_prices
+            return 0.0, np.array([])
 
         portfolio_returns = (daily_returns * aligned_weights).sum(axis=1)
         simulated_pl = total_market_value * portfolio_returns
@@ -105,4 +100,4 @@ class RiskEngine:
         var_percentile = 1 - confidence_level
         var_value = -np.percentile(simulated_pl, var_percentile * 100)
 
-        return var_value, simulated_pl.to_numpy(), historical_prices
+        return var_value, simulated_pl.to_numpy()

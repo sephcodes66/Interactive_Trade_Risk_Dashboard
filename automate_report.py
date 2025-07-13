@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
-from portfolio import PortfolioManager
-from risk_engine import RiskEngine
+from src.portfolio import PortfolioManager
+from src.risk_engine import RiskEngine
 
 # --- Configuration ---
 # In a real application, this would come from a config file or a secure source.

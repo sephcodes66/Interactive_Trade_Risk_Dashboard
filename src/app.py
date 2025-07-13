@@ -7,9 +7,9 @@ import plotly.figure_factory as ff
 from flask import Flask, request, jsonify
 from dash import Dash, dcc, html, Input, Output, State, callback_context, ALL
 
-from portfolio import PortfolioManager
-from risk_engine import RiskEngine
-from db_connector import get_all_tickers
+from src.portfolio import PortfolioManager
+from src.risk_engine import RiskEngine
+from src.models import get_all_tickers
 
 # --- FLASK API SERVER ---
 server = Flask(__name__)
@@ -36,8 +36,7 @@ def calculate_risk():
         if total_value == 0:
              return jsonify({"error": "Could not find market data for any of the selected tickers."}), 400
 
-        var_value, simulated_pl, hist_prices = risk_engine.calculate_historical_var()
-        hist_performance = risk_engine.calculate_historical_performance(hist_prices)
+        var_value, simulated_pl = risk_engine.calculate_historical_var()
         
         # --- Prepare all data for JSON serialization with individual error handling ---
         response_data = {}
@@ -53,7 +52,7 @@ def calculate_risk():
             response_data["var"] = None
 
         try:
-            response_data["market_values_per_stock"] = {k: float(v) for k, v in pm.market_values.items()}
+            response_data["market_values_per_stock"] = {str(k): float(v) for k, v in pm.market_values.items()}
         except (ValueError, TypeError):
             response_data["market_values_per_stock"] = {}
 
@@ -61,14 +60,6 @@ def calculate_risk():
             response_data["simulated_pl"] = [float(x) for x in simulated_pl]
         except (ValueError, TypeError):
             response_data["simulated_pl"] = []
-
-        try:
-            hist_perf_df = hist_performance.reset_index()
-            hist_perf_df.columns = ['price_date', 'value']
-            hist_perf_df['price_date'] = hist_perf_df['price_date'].dt.strftime('%Y-%m-%d')
-            response_data["historical_performance"] = hist_perf_df.to_dict('records')
-        except Exception:
-            response_data["historical_performance"] = []
 
         return jsonify(response_data)
 
@@ -99,7 +90,10 @@ app.layout = html.Div(style={'backgroundColor': '#f0f2f5', 'fontFamily': 'Arial'
                     placeholder="Search and select tickers..."
                 ),
                 html.Div(id='quantity-inputs', style={'marginTop': '20px'}),
-                html.Button('Analyze Portfolio', id='analyze-button', n_clicks=0, style={'marginTop': '20px', 'width': '100%', 'backgroundColor': '#1a3d6d', 'color': 'white', 'border': 'none', 'padding': '10px', 'cursor': 'pointer'}),
+                html.Div(style={'display': 'flex', 'marginTop': '20px'}, children=[
+                    html.Button('Analyze Portfolio', id='analyze-button', n_clicks=0, style={'flex': '60%', 'backgroundColor': '#1a3d6d', 'color': 'white', 'border': 'none', 'padding': '10px', 'cursor': 'pointer'}),
+                    html.Button('Clear', id='clear-button', n_clicks=0, style={'flex': '40%', 'marginLeft': '10px', 'backgroundColor': '#6c757d', 'color': 'white', 'border': 'none', 'padding': '10px', 'cursor': 'pointer'})
+                ])
             ])
         ]),
         
@@ -133,6 +127,17 @@ def generate_quantity_inputs(selected_tickers):
     return inputs
 
 @app.callback(
+    Output('ticker-selector', 'value'),
+    Output('quantity-inputs', 'children', allow_duplicate=True),
+    Output('analysis-output', 'children', allow_duplicate=True),
+    Input('clear-button', 'n_clicks'),
+    prevent_initial_call=True
+)
+def clear_inputs(n_clicks):
+    """Clears all input fields and the output section."""
+    return None, [], None
+
+@app.callback(
     Output('analysis-output', 'children'),
     Input('analyze-button', 'n_clicks'),
     State('ticker-selector', 'value'),
@@ -152,9 +157,13 @@ def update_dashboard(n_clicks, selected_tickers, input_ids, input_values):
     if not portfolio:
         return html.Div("Please enter a quantity for at least one stock.", style={'color': 'red'})
 
-    api_url = "http://127.0.0.1:5000/api/risk"
+    # Use a relative path for the API call to connect to the same server.
+    api_url = "/api/risk"
     try:
-        response = requests.post(api_url, json={'portfolio': portfolio}, timeout=30)
+        # The request needs the full URL including the server address.
+        # We can get this from the request context.
+        host = request.host_url
+        response = requests.post(f"{host.strip('/')}{api_url}", json={'portfolio': portfolio}, timeout=30)
         response.raise_for_status()
         data = response.json()
     except requests.exceptions.RequestException as e:
@@ -163,109 +172,49 @@ def update_dashboard(n_clicks, selected_tickers, input_ids, input_values):
     if 'error' in data:
         return html.Div(f"API Error: {data['error']}", style={'color': 'red'})
 
-    # Build the output display dynamically and safely.
-    output_children = []
-    graph_config = {'staticPlot': True}
-    graph_style = {'height': '450px'}
-
-    # --- Risk Summary Card ---
+    # --- Build Tab Content ---
+    graph_config = {
+        'scrollZoom': False,
+        'displayModeBar': True,
+        'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'select2d', 'lasso2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d']
+    }
+    
+    # Tab 1: Risk Summary
     summary_children = [html.H4("1. Key Risk Metrics", style={'borderBottom': '1px solid #eee', 'paddingBottom': '10px'})]
     if data.get("total_market_value") is not None:
         summary_children.append(html.P(f"Total Portfolio Market Value: ${data['total_market_value']:,.2f}"))
-    else:
-        summary_children.append(html.P("Total Portfolio Market Value: Could not be calculated."))
-
     if data.get("var") is not None:
         var_value = data['var']
         summary_children.append(html.H5(f"Value at Risk (95%, 1-day): ${var_value:,.2f}", style={'color': '#c0392b'}))
-        summary_children.append(html.P("This is the estimated maximum loss the portfolio could experience in a single day, with 95% confidence, based on historical data.", style={'fontSize': '0.9em', 'fontStyle': 'italic'}))
-    else:
-        summary_children.append(html.P("Value at Risk (VaR): Could not be calculated.", style={'fontWeight': 'bold', 'color': '#c0392b'}))
+        summary_children.append(html.P("This is the estimated maximum loss the portfolio could experience in a single day, with 95% confidence.", style={'fontSize': '0.9em', 'fontStyle': 'italic'}))
     
-    output_children.append(html.Div(summary_children, style={'backgroundColor': 'white', 'padding': '20px', 'borderRadius': '5px', 'marginBottom': '20px'}))
-
-    # --- Charts ---
-    charts_children = []
-    # Portfolio Composition Pie Chart
     if data.get("market_values_per_stock"):
-        pie_chart_card = html.Div([
-            html.H4("2. Risk Concentration", style={'borderBottom': '1px solid #eee', 'paddingBottom': '10px'}),
-            html.P("This chart shows where your portfolio's value is concentrated. High concentration in a single asset increases risk.", style={'fontSize': '0.9em'}),
-            dcc.Graph(
-                figure=px.pie(
-                    pd.DataFrame(list(data['market_values_per_stock'].items()), columns=['Ticker', 'Market Value']),
-                    values='Market Value', names='Ticker', title='Portfolio Composition by Market Value'
-                ),
-                config=graph_config,
-                style=graph_style
-            )
-        ], style={'flex': '50%', 'backgroundColor': 'white', 'padding': '20px', 'borderRadius': '5px', 'marginRight': '10px'})
-        charts_children.append(pie_chart_card)
-    
-    # P/L Distribution Chart
+        summary_children.append(html.H4("2. Risk Concentration", style={'borderBottom': '1px solid #eee', 'paddingBottom': '10px', 'marginTop': '20px'}))
+        summary_children.append(html.P("This chart shows where your portfolio's value is concentrated.", style={'fontSize': '0.9em'}))
+        summary_children.append(dcc.Graph(
+            figure=px.pie(
+                pd.DataFrame(list(data['market_values_per_stock'].items()), columns=['Ticker', 'Market Value']),
+                values='Market Value', names='Ticker', title='Portfolio Composition by Market Value'
+            ),
+            config=graph_config
+        ))
+
+    summary_tab = dcc.Tab(label='Risk Summary', children=html.Div(summary_children, style={'padding': '10px'}))
+
+    # Tab 2: Profit/Loss Analysis
+    pl_children = []
     if data.get("simulated_pl"):
         var_value = data.get("var") or 0
-        simulated_pl_data = data["simulated_pl"]
-        
-        # Create the density plot
-        fig = ff.create_distplot(
-            [simulated_pl_data],
-            ['P/L'],
-            show_hist=False,
-            show_rug=False,
-            colors=['#1a3d6d']
-        )
-        
-        fig.update_layout(
-            title_text='Distribution of Simulated Daily P/L',
-            xaxis_title='Simulated Daily Profit/Loss ($)',
-            yaxis_title='Probability Density',
-            xaxis_tickprefix='$',
-            xaxis_tickformat=',.0f'
-        )
-        
-        # Add the VaR line
-        fig.add_vline(
-            x=-var_value, 
-            line_dash="dash", 
-            line_color="red", 
-            annotation_text=f"VaR: ${-var_value:,.0f}"
-        )
-
-        pl_dist_card = html.Div([
-            html.H4("3. Profit/Loss Simulation", style={'borderBottom': '1px solid #eee', 'paddingBottom': '10px'}),
-            html.P("This smooth curve shows the likelihood of different daily outcomes. The peak is the most likely result, and the left tail shows the risk of losses.", style={'fontSize': '0.9em'}),
-            dcc.Graph(
-                figure=fig,
-                config=graph_config,
-                style=graph_style
-            )
-        ], style={'flex': '50%', 'backgroundColor': 'white', 'padding': '20px', 'borderRadius': '5px', 'marginLeft': '10px'})
-        charts_children.append(pl_dist_card)
+        fig = ff.create_distplot([data["simulated_pl"]], ['P/L'], show_hist=False, show_rug=False, colors=['#1a3d6d'])
+        fig.update_layout(title_text='Distribution of Simulated Daily P/L', xaxis_title='Simulated Daily Profit/Loss ($)', yaxis_title='Probability Density', xaxis_tickprefix='$', xaxis_tickformat=',.0f')
+        fig.add_vline(x=-var_value, line_dash="dash", line_color="red", annotation_text=f"VaR: ${-var_value:,.0f}")
+        pl_children.append(html.H4("3. Profit/Loss Simulation", style={'borderBottom': '1px solid #eee', 'paddingBottom': '10px'}))
+        pl_children.append(html.P("This smooth curve shows the likelihood of different daily outcomes. The peak is the most likely result, and the left tail shows the risk of losses.", style={'fontSize': '0.9em'}))
+        pl_children.append(dcc.Graph(figure=fig, config=graph_config))
     
-    output_children.append(html.Div(charts_children, style={'display': 'flex', 'marginBottom': '20px'}))
+    pl_tab = dcc.Tab(label='P/L Analysis', children=html.Div(pl_children, style={'padding': '10px'}))
 
-    # Historical Performance Chart
-    if data.get("historical_performance"):
-        hist_perf_card = html.Div([
-            html.H4("4. Historical Performance Analysis", style={'borderBottom': '1px solid #eee', 'paddingBottom': '10px'}),
-            html.P("This chart shows how this exact portfolio would have performed over the last year, giving insight into its behavior during past market conditions.", style={'fontSize': '0.9em'}),
-            dcc.Graph(
-                figure=px.line(
-                    pd.DataFrame(data['historical_performance']), x='price_date', y='value', title='Simulated Historical Portfolio Value'
-                ).update_layout(
-                    xaxis_title='Date', 
-                    yaxis_title='Portfolio Value ($)',
-                    yaxis_tickprefix='$',
-                    yaxis_tickformat=',.0f'
-                ),
-                config=graph_config,
-                style=graph_style
-            )
-        ], style={'backgroundColor': 'white', 'padding': '20px', 'borderRadius': '5px'})
-        output_children.append(hist_perf_card)
-
-    return html.Div(output_children)
+    return dcc.Tabs([summary_tab, pl_tab])
 
 if __name__ == '__main__':
     app.run(debug=True)

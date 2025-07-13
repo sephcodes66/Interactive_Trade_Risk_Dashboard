@@ -1,6 +1,6 @@
 from sqlalchemy import func
 from sqlalchemy.orm import sessionmaker
-from db_connector import get_engine
+from src import get_engine
 from src.models import Instrument, MarketData
 
 class PortfolioManager:

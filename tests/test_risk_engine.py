@@ -46,12 +46,11 @@ def test_get_historical_data(mock_portfolio_manager, mock_read_sql):
 def test_calculate_historical_var(mock_portfolio_manager, mock_read_sql, mocker):
     """Test the main VaR calculation logic."""
     re = RiskEngine(mock_portfolio_manager)
-    var_value, simulated_pl, hist_prices = re.calculate_historical_var()
+    var_value, simulated_pl = re.calculate_historical_var()
 
     assert simulated_pl.shape[0] == 2 # 2 days of returns
     assert var_value is not None
     assert isinstance(var_value, float)
-    assert not hist_prices.empty
     
     # With a known P/L array, we can test the percentile calculation
     re.get_historical_data = mocker.MagicMock()
