@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # --- Define the portfolio you want to test here ---
     # This portfolio uses a less common ETF which might have incomplete data,
     # making it a good candidate for debugging.
-    test_portfolio = {'AAPL': 100} 
+    test_portfolio = {'MSFT': 100} 
 
     # You can also test the sample portfolios from the dashboard
     # test_portfolio = {"Tech Heavy": {"AAPL": 40, "MSFT": 30, "GOOG": 20, "TSLA": 10}}

@@ -5,6 +5,7 @@ RiskDash is a prototype of a financial risk management system. It provides an in
 The application is built with a modern Python stack, featuring a backend API powered by Flask and a frontend dashboard built with Plotly and Dash. The backend uses the SQLAlchemy ORM to interact with a PostgreSQL database, ensuring the code is maintainable and robust.
 
 ![Dashboard Screenshot](./screenshots/ss_1.png)
+![Dashboard Screenshot](./screenshots/ss_2.png)
 
 ## Key Features
 
