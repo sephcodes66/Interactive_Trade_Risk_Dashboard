@@ -1,129 +1,55 @@
 # RiskDash: An Interactive Risk Analysis Tool
 
-RiskDash is a prototype of a financial risk management system. It provides a suite of tools to help risk analysts and portfolio managers assess the market risk of equity portfolios using **Value at Risk (VaR)**.
+RiskDash is a prototype of a financial risk management system. It provides an interactive web dashboard to help risk analysts and portfolio managers assess the market risk of equity portfolios using the industry-standard **Value at Risk (VaR)** metric.
 
-This enhanced version of the project demonstrates a full-stack data application with a clear separation of concerns, featuring a backend API, an interactive web dashboard, and an automated reporting script.
-
-## Table of Contents
-- [System Architecture](#system-architecture)
-- [Features](#features)
-- [How to Use RiskDash](#how-to-use-riskdash)
-  - [1. The REST API](#1-the-rest-api)
-  - [2. The Interactive Dashboard](#2-the-interactive-dashboard)
-  - [3. Automated Daily Reporting](#3-automated-daily-reporting)
-- [Setup and Installation](#setup-and-installation)
-- [Code Quality: Linting and Testing](#code-quality-linting-and-testing)
-
-## System Architecture
-
-The application is now composed of several decoupled components:
-
-1.  **Data Ingestion Pipeline (`ingest_data.py`):** A script that sources historical stock price data from CSV files and loads it into a PostgreSQL database.
-2.  **PostgreSQL Database:** Stores clean `instruments` and `market_data` information.
-3.  **Backend Risk Engine (`portfolio.py`, `risk_engine.py`):** The core Python logic for managing portfolios and calculating historical VaR.
-4.  **Flask REST API (`app.py`):** A robust API built with **Flask** that exposes the risk engine's functionality over HTTP, making it available to any client.
-5.  **Interactive Dashboard (`app.py`):** A web application built with **Dash** and **Plotly**. It acts as a client to the Flask API to provide an interactive user interface for risk analysis.
-6.  **Automation Script (`automate_report.py`):** A standalone script for generating scheduled, automated risk reports.
-
-
-## Features
-
-* **Decoupled API-First Design:** Core logic is exposed via a REST API for system integration.
-* **Interactive Web Dashboard:** A user-friendly interface for ad-hoc risk analysis and visualization.
-* **Automated Reporting:** Scriptable, automated generation of daily risk reports.
-* **Historical VaR Calculation:** Implements the industry-standard historical simulation method for VaR.
-* **Rich Data Visualization:** Includes interactive pie charts of portfolio composition.
-* **Quality Assured:** The codebase includes a comprehensive suite of unit tests (`pytest`) and is formatted with a linter (`ruff`).
-
-## How to Use RiskDash
-
-There are three primary ways to use the RiskDash prototype.
-
-### 1. The REST API
-
-The Flask API is the core of the system. You can interact with it directly to get programmatic access to the risk engine.
-
-**To run the API server:**
-```bash
-flask run
-```
-The API will be available at `http://127.0.0.1:5000`.
-
-**Endpoint:** `POST /api/risk`
-
-This endpoint accepts a JSON payload with a portfolio and returns the calculated risk metrics.
-
-**Example Request (`curl`):**
-```bash
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"portfolio": {"AAPL": 10, "MSFT": 20, "TSLA": 5}}' \
-  http://127.0.0.1:5000/api/risk
-```
-
-**Example Success Response:**
-```json
-{
-  "market_values_per_stock": {
-    "AAPL": 2143.5,
-    "MSFT": 5930.2,
-    "TSLA": 893.5
-  },
-  "total_market_value": 8967.2,
-  "var": 253.81
-}
-```
-
-### 2. The Interactive Dashboard
-
-The dashboard provides a user-friendly, graphical interface for the API.
-
-**To run the dashboard:**
-```bash
-python src.app
-```
-The dashboard will be available at `http://127.0.0.1:8050/dash/`.
-
-**How to use it:**
-1.  Select one or more stocks from the searchable dropdown.
-2.  Enter the quantity for each selected stock.
-3.  Click the "Analyze Portfolio" button.
-4.  The dashboard will call the API and display the risk analysis, including the VaR, a risk concentration pie chart, and a smoothed density plot of potential profit and loss outcomes.
+The application is built with a modern Python stack, featuring a backend API powered by Flask and a frontend dashboard built with Plotly and Dash. The backend uses the SQLAlchemy ORM to interact with a PostgreSQL database, ensuring the code is maintainable and robust.
 
 ![Dashboard Screenshot](./screenshots/ss_1.png)
 
-### 3. Automated Daily Reporting
+## Key Features
 
-The automation script generates a daily risk report for a pre-defined sample portfolio.
+*   **Interactive Portfolio Builder:** Easily construct a portfolio by selecting multiple stocks from a searchable dropdown and specifying quantities.
+*   **Value at Risk (VaR) Calculation:** The core of the application calculates the 1-day 95% VaR using the Historical Simulation method, providing a clear measure of potential downside risk.
+*   **Risk Concentration Analysis:** A pie chart immediately shows the weight of each asset in the portfolio, making it easy to spot concentration risk.
+*   **Profit/Loss Simulation:** A smoothed density plot visualizes the distribution of potential daily profit and loss outcomes, offering an intuitive look at the portfolio's volatility and risk profile.
+*   **Robust Backend:** The application is built on a solid foundation with a Flask API, a PostgreSQL database, and the SQLAlchemy ORM for clean, maintainable data access.
+*   **Fully Tested:** The entire backend is verified by a comprehensive suite of unit tests using `pytest`.
 
-**To run the script:**
-```bash
-python -m src.automate_report
+## Project Structure
+
+The project is structured as an installable Python package.
+
 ```
-
-This will create a Markdown file at `reports/daily_risk_report.md` containing a summary of the analysis. This script can be scheduled to run automatically using tools like `cron`.
-
-## Development Highlights & Challenges
-
-This project, while a prototype, involved overcoming several real-world software engineering challenges that highlight a practical and problem-solving approach to development:
-
-*   **Solved Critical Data Serialization Bug:** A recurring `500 Internal Server Error` was traced to a subtle issue where numeric data types from the backend's `pandas` and `numpy` libraries were not compatible with the frontend's JSON parser. The solution involved implementing a robust data sanitization layer in the API to ensure all outgoing data was converted to "JSON-safe" types, making the application stable and reliable.
-
-*   **Refactored Core Logic to ORM:** The initial version of the application used raw SQL queries embedded in the Python code. To improve maintainability and code quality, the entire data access layer was refactored to use the SQLAlchemy ORM. This involved creating new data models, rewriting all queries using the ORM's syntax, and overhauling the test suite with new mocks to verify the new architecture.
-
-*   **Designed an Interactive and Resilient UI:** The dashboard was redesigned from a static JSON input to a fully interactive portfolio builder. When this introduced callback errors for certain data inputs, the dashboard's rendering logic was hardened to gracefully handle missing or null data, ensuring a smooth user experience without crashes.
+.
+├── automate_report.py    # Script to generate a daily risk report.
+├── data/                   # Contains the raw stock and ETF data in CSV format.
+├── ingest_data.py        # Script to load the CSV data into the PostgreSQL database.
+├── requirements.txt      # A list of all Python packages required by the project.
+├── setup.py              # Makes the project installable.
+├── src/
+│   ├── __init__.py       # Marks 'src' as a package and contains the DB connection logic.
+│   ├── app.py            # Contains the main Dash application layout and callbacks, and the Flask API.
+│   ├── models.py         # Defines the SQLAlchemy ORM models for the database tables.
+│   ├── portfolio.py      # The PortfolioManager class, responsible for portfolio-related calculations.
+│   └── risk_engine.py    # The RiskEngine class, which handles the core VaR calculation.
+└── tests/
+    ├── test_api.py
+    ├── test_portfolio.py
+    └── test_risk_engine.py
+```
 
 ## Setup and Installation
 
 ### Prerequisites
-* Python 3.9+
-* PostgreSQL server running
+*   Python 3.9+
+*   PostgreSQL server running
 
 ### Steps
+
 1.  **Clone the repository:**
     ```bash
-    git clone <your-repo-url>
-    cd <your-repo-directory>
+    git clone https://github.com/sephcodes66/Interactive_Trade_Risk_Dashboard.git
+    cd Interactive_Trade_Risk_Dashboard
     ```
 
 2.  **Create and activate a virtual environment:**
@@ -137,24 +63,45 @@ This project, while a prototype, involved overcoming several real-world software
     pip install -r requirements.txt
     ```
 
-4.  **Set up the database:**
-    * Connect to PostgreSQL and create a new database (e.g., `risk_dash_db`).
-    * Create a `.env` file in the project root by copying the example: `cp .env.example .env`.
-    * Edit the `.env` file with your database credentials.
-
-5.  **Run the data ingestion script:**
-    This will populate your database with the required historical data.
+4.  **Install the project in editable mode:**
+    This is a crucial step that makes the `src` package available to the scripts.
     ```bash
-    python src/ingest_data.py
+    pip install -e .
     ```
 
-## Code Quality: Linting and Testing
+5.  **Set up the database:**
+    *   Connect to your PostgreSQL server and create a new database (e.g., `risk_dash_db`).
+    *   Create a `.env` file in the project root by copying the example: `cp .env.example .env`.
+    *   Edit the `.env` file with your database credentials (user, password, host, port, and the database name).
 
-*   **To run the linter (Ruff):**
+6.  **Run the data ingestion script:**
+    This will create the necessary tables and populate your database with the historical data. This may take a few minutes.
     ```bash
-    ruff check .
+    python ingest_data.py
     ```
-*   **To run the unit tests (Pytest):**
-    ```bash
-    pytest
-    ```
+
+## How to Run
+
+### Interactive Dashboard
+
+To run the main web application, execute the following command from the project's root directory:
+
+```bash
+python -m src.app
+```
+The dashboard will be available at **http://127.0.0.1:8050/dash/**.
+
+### Automated Report
+
+To generate a daily risk report for a sample portfolio, run:
+```bash
+python automate_report.py
+```
+This will create a Markdown file in the `reports/` directory.
+
+## Running Tests
+
+To run the full suite of unit tests, use `pytest`:
+```bash
+pytest
+```
