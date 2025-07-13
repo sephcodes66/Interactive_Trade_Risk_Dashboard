@@ -25,7 +25,6 @@ The application is now composed of several decoupled components:
 5.  **Interactive Dashboard (`app.py`):** A web application built with **Dash** and **Plotly**. It acts as a client to the Flask API to provide an interactive user interface for risk analysis.
 6.  **Automation Script (`automate_report.py`):** A standalone script for generating scheduled, automated risk reports.
 
-![System Diagram](https://i.imgur.com/9yZ0A4R.png) 
 
 ## Features
 
