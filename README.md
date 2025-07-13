@@ -32,10 +32,15 @@ The project is structured as an installable Python package.
 │   ├── models.py         # Defines the SQLAlchemy ORM models for the database tables.
 │   ├── portfolio.py      # The PortfolioManager class, responsible for portfolio-related calculations.
 │   └── risk_engine.py    # The RiskEngine class, which handles the core VaR calculation.
-└── tests/
-    ├── test_api.py
-    ├── test_portfolio.py
-    └── test_risk_engine.py
+├── tests/
+│   ├── test_api.py
+│   ├── test_portfolio.py
+│   └── test_risk_engine.py
+├── .env.example          # Example environment file for database credentials.
+├── BUSINESS_REQUIREMENTS.md # Outlines the high-level goals and scope of the project.
+├── CHANGELOG.md          # A log of all notable changes, features, and bug fixes.
+├── database_schema.md    # Documents the database schema and complex query designs.
+└── TESTING.md            # Contains the User Acceptance Testing (UAT) plan and acceptance criteria.
 ```
 
 ## Setup and Installation
