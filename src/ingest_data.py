@@ -10,7 +10,7 @@ def create_tables(engine):
     Indexes are crucial for query performance on large datasets.
     """
     with engine.connect() as conn:
-        with conn.begin(): # Start a transaction
+        with conn.begin():
             conn.execute(text("""
             CREATE TABLE IF NOT EXISTS instruments (
                 instrument_id SERIAL PRIMARY KEY,
@@ -31,7 +31,6 @@ def create_tables(engine):
                 UNIQUE(instrument_id, price_date)
             );
             """))
-            # Add indexes to foreign keys and frequently queried columns for performance.
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_market_data_instrument_id ON market_data (instrument_id);"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_market_data_price_date ON market_data (price_date);"))
     print("Tables and indexes checked/created successfully.")
@@ -41,26 +40,23 @@ def ingest_data(engine):
     Finds all CSV files in the data directory, cleans the data,
     and efficiently loads it into the database.
     """
-    # Find all stock and ETF data files.
     stock_files = glob.glob('data/archive/stocks/*.csv')
     etf_files = glob.glob('data/archive/etfs/*.csv')
     all_files = sorted(list(set(stock_files + etf_files)))
     print(f"Found {len(all_files)} data files to ingest.")
 
     with engine.connect() as conn:
-        with conn.begin(): # Use a single transaction for the entire ingestion process.
+        with conn.begin():
             for filepath in all_files:
                 ticker = os.path.splitext(os.path.basename(filepath))[0]
                 print(f"Processing {ticker}...")
 
-                # Insert instrument if it doesn't exist, then get its ID.
                 instrument_id_result = conn.execute(
                     text("INSERT INTO instruments (ticker, company_name) VALUES (:ticker, :name) ON CONFLICT (ticker) DO UPDATE SET ticker=EXCLUDED.ticker RETURNING instrument_id"),
                     {"ticker": ticker, "name": ticker}
                 ).fetchone()
                 instrument_id = instrument_id_result[0]
 
-                # Read and prepare the DataFrame.
                 df = pd.read_csv(filepath)
                 df.rename(columns={
                     'Date': 'price_date', 'Open': 'open_price', 'High': 'high_price', 
@@ -71,11 +67,9 @@ def ingest_data(engine):
                 df['price_date'] = pd.to_datetime(df['price_date'])
                 df_to_insert = df[['instrument_id', 'price_date', 'open_price', 'high_price', 'low_price', 'close_price', 'volume']]
                 
-                # Replace pandas NaN with None for database compatibility.
                 df_to_insert = df_to_insert.where(pd.notnull(df_to_insert), None)
                 data_to_insert = df_to_insert.to_dict(orient='records')
 
-                # Use 'executemany' for efficient bulk insertion.
                 if data_to_insert:
                     conn.execute(
                         text("""

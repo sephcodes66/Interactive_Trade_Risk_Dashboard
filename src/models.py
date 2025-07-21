@@ -43,7 +43,6 @@ def get_all_tickers() -> list:
             tickers = [row[0] for row in result]
     except Exception as e:
         print(f"Error fetching tickers: {e}")
-        # Provide a fallback list to ensure the dashboard can always start.
         return ['AAPL', 'GOOG', 'MSFT', 'TSLA', 'VTI', 'AGG'] 
         
     return tickers

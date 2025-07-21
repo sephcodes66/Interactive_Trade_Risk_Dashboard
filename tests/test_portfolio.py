@@ -5,21 +5,17 @@ from src.portfolio import PortfolioManager
 @pytest.fixture
 def mock_db_session(mocker):
     """Fixture to mock the SQLAlchemy session and ORM query."""
-    # Mock the session and the query chain
     mock_session = MagicMock()
     mock_query = MagicMock()
     
-    # The final result of the chained query
     mock_query.all.return_value = [
         ('AAPL', 150.00),
         ('GOOG', 2800.00),
         ('TSLA', 700.00)
     ]
     
-    # Mock the query chain: session.query(...).join(...).join(...).filter(...).all()
     mock_session.query.return_value.join.return_value.join.return_value.filter.return_value = mock_query
     
-    # Patch the sessionmaker to return our mock session
     mocker.patch('src.portfolio.sessionmaker', return_value=lambda: mock_session)
 
 def test_portfolio_initialization():
@@ -46,11 +42,10 @@ def test_get_current_prices(mock_db_session):
 
 def test_calculate_total_market_value(mock_db_session):
     """Test the calculation of the total market value."""
-    portfolio_dict = {'AAPL': 10, 'GOOG': 2, 'FAKE': 10} # FAKE should be ignored
+    portfolio_dict = {'AAPL': 10, 'GOOG': 2, 'FAKE': 10}
     pm = PortfolioManager(portfolio_dict)
     total_value = pm.calculate_total_market_value()
     
-    # Expected value: (10 * 150.00) + (2 * 2800.00) = 1500 + 5600 = 7100
     assert total_value == 7100.00
     assert pm.market_values['AAPL'] == 1500.00
     assert pm.market_values['GOOG'] == 5600.00

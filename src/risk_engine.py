@@ -28,7 +28,6 @@ class RiskEngine:
 
         session = self.Session()
         try:
-            # Subquery to rank the dates for each instrument
             ranked_prices_subquery = session.query(
                 Instrument.ticker,
                 MarketData.price_date,
@@ -44,7 +43,6 @@ class RiskEngine:
                 Instrument.ticker.in_(tickers)
             ).subquery()
 
-            # Main query to select the top 'n' days
             query = session.query(
                 ranked_prices_subquery.c.ticker,
                 ranked_prices_subquery.c.price_date,
@@ -65,11 +63,12 @@ class RiskEngine:
             
         historical_prices_pivot = df.pivot(index='price_date', columns='ticker', values='close_price')
         
-        # Forward-fill missing values to handle non-trading days or data gaps.
-        # This is a standard practice and more robust than dropping columns.
+        # NOTE: Using forward-fill to handle missing data for non-trading days (like weekends).
+        # This is a simplifying assumption: it assumes the price just carries over.
+        # For a more advanced model, we might want to interpolate or use a more sophisticated method.
         historical_prices_pivot.ffill(inplace=True)
         
-        # Drop any remaining NaN columns (only if a stock has no data at all).
+        # If a stock has no data at all in the window, it will be all NaNs. Drop it.
         historical_prices_pivot.dropna(axis='columns', how='all', inplace=True)
         
         return historical_prices_pivot

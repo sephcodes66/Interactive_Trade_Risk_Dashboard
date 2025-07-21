@@ -11,7 +11,6 @@ from src.portfolio import PortfolioManager
 from src.risk_engine import RiskEngine
 from src.models import get_all_tickers
 
-# --- FLASK API SERVER ---
 server = Flask(__name__)
 
 @server.route('/api/risk', methods=['POST'])
@@ -38,7 +37,6 @@ def calculate_risk():
 
         var_value, simulated_pl = risk_engine.calculate_historical_var()
         
-        # --- Prepare all data for JSON serialization with individual error handling ---
         response_data = {}
         
         try:
@@ -68,7 +66,6 @@ def calculate_risk():
     except Exception as e:
         return jsonify({"error": f"An unexpected error occurred on the server: {e}"}), 500
 
-# --- DASHBOARD ---
 app = Dash(__name__, server=server, url_base_pathname='/dash/')
 all_tickers = get_all_tickers()
 
@@ -78,7 +75,6 @@ app.layout = html.Div(style={'backgroundColor': '#f0f2f5', 'fontFamily': 'Arial'
     ]),
     
     html.Div(style={'display': 'flex', 'padding': '20px'}, children=[
-        # Left Panel: Inputs
         html.Div(style={'flex': '30%', 'padding': '10px', 'position': 'sticky', 'top': '20px', 'alignSelf': 'flex-start'}, children=[
             html.Div(style={'backgroundColor': 'white', 'padding': '20px', 'borderRadius': '5px'}, children=[
                 html.H4("Build Your Portfolio", style={'borderBottom': '1px solid #eee', 'paddingBottom': '10px'}),
@@ -97,7 +93,6 @@ app.layout = html.Div(style={'backgroundColor': '#f0f2f5', 'fontFamily': 'Arial'
             ])
         ]),
         
-        # Right Panel: Outputs
         html.Div(style={'flex': '70%', 'padding': '10px'}, children=[
             dcc.Loading(id="loading-icon", children=[html.Div(id='analysis-output')], type="default")
         ])
@@ -157,11 +152,8 @@ def update_dashboard(n_clicks, selected_tickers, input_ids, input_values):
     if not portfolio:
         return html.Div("Please enter a quantity for at least one stock.", style={'color': 'red'})
 
-    # Use a relative path for the API call to connect to the same server.
     api_url = "/api/risk"
     try:
-        # The request needs the full URL including the server address.
-        # We can get this from the request context.
         host = request.host_url
         response = requests.post(f"{host.strip('/')}{api_url}", json={'portfolio': portfolio}, timeout=30)
         response.raise_for_status()
@@ -172,14 +164,12 @@ def update_dashboard(n_clicks, selected_tickers, input_ids, input_values):
     if 'error' in data:
         return html.Div(f"API Error: {data['error']}", style={'color': 'red'})
 
-    # --- Build Tab Content ---
     graph_config = {
         'scrollZoom': False,
         'displayModeBar': True,
         'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'select2d', 'lasso2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d']
     }
     
-    # Tab 1: Risk Summary
     summary_children = [html.H4("1. Key Risk Metrics", style={'borderBottom': '1px solid #eee', 'paddingBottom': '10px'})]
     if data.get("total_market_value") is not None:
         summary_children.append(html.P(f"Total Portfolio Market Value: ${data['total_market_value']:,.2f}"))
@@ -201,7 +191,6 @@ def update_dashboard(n_clicks, selected_tickers, input_ids, input_values):
 
     summary_tab = dcc.Tab(label='Risk Summary', children=html.Div(summary_children, style={'padding': '10px'}))
 
-    # Tab 2: Profit/Loss Analysis
     pl_children = []
     if data.get("simulated_pl"):
         var_value = data.get("var") or 0

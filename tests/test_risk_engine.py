@@ -17,7 +17,6 @@ def mock_portfolio_manager(mocker):
 @pytest.fixture
 def mock_read_sql(mocker):
     """Fixture to mock the pandas.read_sql function."""
-    # Create a sample historical data DataFrame to be returned by read_sql
     data = {
         'price_date': pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-03', '2023-01-01', '2023-01-02', '2023-01-03']),
         'ticker': ['AAPL', 'AAPL', 'AAPL', 'GOOG', 'GOOG', 'GOOG'],
@@ -25,7 +24,6 @@ def mock_read_sql(mocker):
     }
     mock_df = pd.DataFrame(data)
     
-    # The RiskEngine uses pd.read_sql, so we patch that
     mocker.patch('pandas.read_sql', return_value=mock_df)
 
 def test_risk_engine_initialization(mock_portfolio_manager):
@@ -48,13 +46,11 @@ def test_calculate_historical_var(mock_portfolio_manager, mock_read_sql, mocker)
     re = RiskEngine(mock_portfolio_manager)
     var_value, simulated_pl = re.calculate_historical_var()
 
-    assert simulated_pl.shape[0] == 2 # 2 days of returns
+    assert simulated_pl.shape[0] == 2
     assert var_value is not None
     assert isinstance(var_value, float)
     
-    # With a known P/L array, we can test the percentile calculation
     re.get_historical_data = mocker.MagicMock()
     test_pl = np.array([-1000, -500, 100, 2000])
     var = -np.percentile(test_pl, 5)
     assert np.isclose(var, 925.0)
-

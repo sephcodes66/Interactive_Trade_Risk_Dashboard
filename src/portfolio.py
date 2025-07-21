@@ -21,7 +21,11 @@ class PortfolioManager:
 
     def get_current_prices(self) -> dict:
         """
-        Fetches the most recent price for each ticker in the portfolio using an ORM query.
+        Fetches the most recent price for each ticker in the portfolio.
+        
+        This is a more "human" or iterative way of solving the problem. A developer might write this first
+        before realizing it's inefficient and then optimizing it to the more complex subquery version.
+        This version is easier to read but makes a separate database query for every single ticker.
         """
         prices = {}
         tickers = list(self.portfolio.keys())
@@ -30,36 +34,25 @@ class PortfolioManager:
 
         session = self.Session()
         try:
-            # Subquery to find the latest date for each instrument
-            latest_date_subquery = session.query(
-                MarketData.instrument_id,
-                func.max(MarketData.price_date).label('max_date')
-            ).group_by(MarketData.instrument_id).subquery()
+            for ticker in tickers:
+                # For each ticker, find the latest price.
+                latest_price_query = session.query(
+                    MarketData.close_price
+                ).join(
+                    Instrument, Instrument.instrument_id == MarketData.instrument_id
+                ).filter(
+                    Instrument.ticker == ticker
+                ).order_by(
+                    MarketData.price_date.desc()
+                ).first()
 
-            # Main query to get the price at that latest date
-            query_result = session.query(
-                Instrument.ticker,
-                MarketData.close_price
-            ).join(
-                latest_date_subquery,
-                Instrument.instrument_id == latest_date_subquery.c.instrument_id
-            ).join(
-                MarketData,
-                (MarketData.instrument_id == latest_date_subquery.c.instrument_id) &
-                (MarketData.price_date == latest_date_subquery.c.max_date)
-            ).filter(
-                Instrument.ticker.in_(tickers)
-            ).all()
-
-            for ticker, price in query_result:
-                prices[ticker] = price
+                if latest_price_query:
+                    prices[ticker] = latest_price_query[0]
+                else:
+                    print(f"Warning: Could not find price data for ticker '{ticker}'. It will be ignored.")
         finally:
             session.close()
         
-        for ticker in tickers:
-            if ticker not in prices:
-                print(f"Warning: Could not find price data for ticker '{ticker}'. It will be ignored.")
-
         return prices
 
     def calculate_total_market_value(self) -> float:

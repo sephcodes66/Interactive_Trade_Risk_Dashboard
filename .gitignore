@@ -148,3 +148,7 @@ cython_debug/
 
 # Generated reports
 reports/
+
+# Ignore self
+.gitignore
+plan.md
