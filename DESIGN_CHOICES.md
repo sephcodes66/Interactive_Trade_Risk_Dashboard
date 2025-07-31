@@ -1,38 +1,38 @@
-# Design Choices and Development Notes
+# Dev Notes: Why I Built It This Way
 
-This document provides some insight into why certain architectural and design decisions were made during the development of RiskDash. It's meant to feel like a developer's journal, capturing the thought process behind the code.
+This document is basically my developer journal. It's where I'm jotting down the "why" behind some of the technical decisions I made while building RiskDash. Hope it gives you some context!
 
 ## 1. Monolith vs. Microservices: Why a Single `app.py`?
 
-For this prototype, I decided to keep the Flask API server and the Dash UI application in the same file (`src/app.py`).
+When I started this, I was tempted to go all-in with a "proper" microservices architecture. But then I took a step back and asked myself: "Do I really need that?" For this prototype, the answer was a clear "no."
 
-**The Rationale:**
-*   **Simplicity:** For a small-scale application, managing a single process is far simpler. There's no need for complex inter-service communication, separate deployments, or managing multiple environments.
-*   **Rapid Prototyping:** The goal was to build a functional prototype quickly. Keeping everything together allowed me to focus on the core features (risk calculations, UI interactivity) without getting bogged down in infrastructure.
-*   **Shared Context:** The Dash app makes a call to its own Flask server. While this feels a bit like a network call to yourself, it cleanly separates the UI from the calculation logic. It also mimics how a real, decoupled frontend would work.
+**My Rationale:**
+*   **Keep It Simple, Stupid (KISS):** For a small app like this, managing a single `app.py` is just so much easier. No wrestling with Docker Compose or figuring out inter-service communication. I wanted to build a risk tool, not a distributed systems masterpiece.
+*   **Speed:** My goal was to get a working prototype up and running fast. Sticking everything in one place let me focus on the fun stuff (the risk calculations and the UI) instead of getting bogged down in infrastructure.
+*   **Simulating a Real-World Setup:** The Dash app makes a call to its own Flask server. I know, it feels a bit like a network call to yourself, but it's a clean way to separate the UI from the backend logic. It also means that if I ever *do* want to split them, the frontend code is already set up to call an API.
 
-**Future Considerations:**
-If this project were to grow, I would absolutely split them. The Flask API would become its own microservice, and the Dash app (or a React/Vue frontend) would be a separate service. This would allow them to be scaled, developed, and deployed independently.
+**If This Were a "Real" Project:**
+If this project were to grow into something bigger, I'd absolutely split them. The Flask API would become its own service, and the Dash app (or maybe a React/Vue frontend) would be another. That way, they could be scaled, developed, and deployed independently. But for now, one file is plenty.
 
-## 2. The Database Query Dilemma: Iteration vs. Optimization
+## 2. The Database Query Dilemma: An Honest Look at a "Good Enough" Solution
 
-When fetching data, there's often a trade-off between code that is easy to write/understand and code that is highly performant.
+When you're fetching data, there's always a tension between writing code that's easy to understand and code that's lightning-fast. I hit this problem head-on.
 
 **The `get_current_prices` Method:**
-The first version of this function was written to be simple: loop through each ticker and make a database call to get its latest price. It's clean, easy to follow, but very inefficient (the N+1 query problem).
+My first version of this function was super simple: loop through each stock ticker and make a separate database call to get its latest price. It worked, it was easy to read, but it was also a classic example of the "N+1 query problem" – very inefficient.
 
-I later refactored this to use a more complex, but much faster, single-query approach using a SQL subquery. However, for this "human-built" version of the project, I've reverted to the iterative approach to better reflect a common development journey. It's a good example of a "good enough" solution that a developer might write under time pressure.
+I did refactor it later to use a much faster single-query approach with a SQL subquery. But for this "human-built" version of the project, I actually decided to revert to the simpler, iterative approach. Why? Because it's a perfect example of a "good enough" solution that a real developer might write when they're focused on getting a feature out the door. It's a trade-off, and sometimes readability wins.
 
 **The `get_historical_data` Method:**
-This function uses a more advanced window function (`row_number()`) to get the last N days of data for all tickers in one go. This was a conscious decision to optimize what could be a very heavy query, as fetching a year of data for dozens of stocks could otherwise be very slow.
+For this function, I went the other way. I used a more advanced SQL window function (`row_number()`) to grab the last N days of data for all tickers in one shot. This was a conscious optimization. Fetching a year of daily prices for a dozen stocks can be slow, and I didn't want the dashboard to feel sluggish.
 
-## 3. Data Handling: `ffill` for Missing Data
+## 3. Dealing with Messy Data: `ffill` to the Rescue
 
-In `src/risk_engine.py`, I used `ffill()` (forward-fill) to handle gaps in the historical data.
+In `src/risk_engine.py`, I used the pandas `ffill()` (forward-fill) method to handle gaps in the historical stock data.
 
-**Why?**
-*   Financial data often has gaps, especially for weekends and holidays.
-*   `ffill` is a simple and standard way to address this. It assumes the price from the previous day is the best estimate for the missing day.
-*   It's much better than just dropping the dates, which would distort the time series.
+**Why `ffill`?**
+*   Real-world financial data is messy. You get gaps for weekends, holidays, or just weird data issues.
+*   `ffill` is a simple, pragmatic way to handle it. It just assumes that if a price is missing, the price from the previous day is the best guess.
+*   It's way better than just dropping the missing days, which would mess up the time series and ruin the VaR calculation.
 
-This is a pragmatic choice. A more rigorous, academic model might use linear interpolation or another statistical method, but `ffill` is a solid, practical choice for a production-oriented prototype.
+Is it the most scientifically rigorous method? Probably not. An academic paper might call for linear interpolation or some other fancy statistical technique. But for a practical tool like this, `ffill` is a solid, battle-tested choice. It gets the job done.

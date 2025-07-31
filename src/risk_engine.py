@@ -1,102 +1,87 @@
 import pandas as pd
 import numpy as np
-from sqlalchemy import func
-from sqlalchemy.orm import sessionmaker
-from src import get_engine
-from src.models import Instrument, MarketData
+from sqlalchemy import text
+from .portfolio import PortfolioManager
 
 class RiskEngine:
     """
-    Calculates financial risk metrics for a given portfolio using the SQLAlchemy ORM.
+    This is where the magic happens. The RiskEngine takes a portfolio
+    and runs the calculations for Value at Risk (VaR).
     """
-    def __init__(self, portfolio_manager):
-        """
-        Initializes the RiskEngine.
-        """
-        self.portfolio_manager = portfolio_manager
-        self.engine = get_engine()
-        self.Session = sessionmaker(bind=self.engine)
+    def __init__(self, portfolio_manager: PortfolioManager):
+        self.pm = portfolio_manager
+        self.db = self.pm.db_session
 
-    def get_historical_data(self, days: int = 252) -> pd.DataFrame:
+    def get_historical_data(self, days=252) -> pd.DataFrame:
         """
-        Fetches the last 'n' days of historical price data for all tickers
-        in the portfolio using an ORM query.
+        Fetches the last N days of historical price data for all tickers in the portfolio.
+        
+        I'm using a window function here (`row_number`) to do this efficiently in a
+        single database query. The alternative would be to pull all data and then
+        filter in pandas, but that would be much slower and use more memory.
         """
-        tickers = list(self.portfolio_manager.portfolio.keys())
-        if not tickers:
-            return pd.DataFrame()
-
-        session = self.Session()
-        try:
-            ranked_prices_subquery = session.query(
-                Instrument.ticker,
-                MarketData.price_date,
-                MarketData.close_price,
-                func.row_number().over(
-                    partition_by=Instrument.ticker,
-                    order_by=MarketData.price_date.desc()
-                ).label('rn')
-            ).join(
-                MarketData,
-                Instrument.instrument_id == MarketData.instrument_id
-            ).filter(
-                Instrument.ticker.in_(tickers)
-            ).subquery()
-
-            query = session.query(
-                ranked_prices_subquery.c.ticker,
-                ranked_prices_subquery.c.price_date,
-                ranked_prices_subquery.c.close_price
-            ).filter(
-                ranked_prices_subquery.c.rn <= days
-            ).order_by(
-                ranked_prices_subquery.c.price_date.asc()
+        # The SQL query uses a Common Table Expression (CTE) to first number the rows
+        # for each ticker by date, and then it selects the top N rows.
+        query = text(f"""
+            WITH ranked_prices AS (
+                SELECT
+                    ticker,
+                    date,
+                    close,
+                    ROW_NUMBER() OVER(PARTITION BY ticker ORDER BY date DESC) as rn
+                FROM historical_prices
+                WHERE ticker IN :tickers
             )
-            
-            df = pd.read_sql(query.statement, session.bind)
-
-        finally:
-            session.close()
-
-        if df.empty:
-            return pd.DataFrame()
-            
-        historical_prices_pivot = df.pivot(index='price_date', columns='ticker', values='close_price')
+            SELECT ticker, date, close
+            FROM ranked_prices
+            WHERE rn <= :days
+        """)
         
-        # NOTE: Using forward-fill to handle missing data for non-trading days (like weekends).
-        # This is a simplifying assumption: it assumes the price just carries over.
-        # For a more advanced model, we might want to interpolate or use a more sophisticated method.
-        historical_prices_pivot.ffill(inplace=True)
+        df = pd.read_sql(query, self.db.bind, params={'tickers': tuple(self.pm.tickers), 'days': days})
         
-        # If a stock has no data at all in the window, it will be all NaNs. Drop it.
-        historical_prices_pivot.dropna(axis='columns', how='all', inplace=True)
+        # Now, we pivot the data so that each column is a ticker and each row is a date.
+        # This is the format we need for our calculations.
+        pivot_df = df.pivot(index='date', columns='ticker', values='close').sort_index()
         
-        return historical_prices_pivot
+        # Financial data often has gaps (weekends, holidays). Forward-filling is a
+        # standard way to handle this. It assumes the price just stays the same.
+        return pivot_df.ffill()
 
-    def calculate_historical_var(self, confidence_level: float = 0.95, days: int = 252) -> tuple:
+    def calculate_historical_var(self, days=252, confidence_level=0.95):
         """
-        Calculates the historical Value at Risk (VaR) for the portfolio.
+        Calculates the 1-day Value at Risk (VaR) using the historical simulation method.
+
+        This method is simple and intuitive. It just looks at the historical daily
+        returns and finds the point at which a certain percentage of losses
+        would not have been exceeded.
+        
+        TODO: Add other VaR models, like Parametric VaR (which assumes a normal
+        distribution) or a full-blown Monte Carlo simulation.
         """
-        total_market_value = self.portfolio_manager.calculate_total_market_value()
-        if total_market_value == 0:
-            return 0.0, np.array([])
+        if not self.pm.market_values:
+            # This should have been called already, but just in case...
+            self.pm.calculate_total_market_value()
 
-        historical_prices = self.get_historical_data(days=days)
-        if historical_prices.empty:
-            return 0.0, np.array([])
+        # 1. Get historical data
+        hist_data = self.get_historical_data(days)
+        if hist_data.empty:
+            return None, []
 
-        weights = pd.Series(self.portfolio_manager.market_values) / total_market_value
-        aligned_weights = weights.reindex(historical_prices.columns, fill_value=0)
-            
-        daily_returns = historical_prices.pct_change(fill_method=None).dropna()
+        # 2. Calculate daily returns for each stock
+        returns = hist_data.pct_change().dropna()
 
-        if daily_returns.empty:
-            return 0.0, np.array([])
-
-        portfolio_returns = (daily_returns * aligned_weights).sum(axis=1)
-        simulated_pl = total_market_value * portfolio_returns
-
-        var_percentile = 1 - confidence_level
-        var_value = -np.percentile(simulated_pl, var_percentile * 100)
-
-        return var_value, simulated_pl.to_numpy()
+        # 3. Calculate the dollar value of each stock in the portfolio
+        weights = pd.Series(self.pm.market_values)
+        
+        # 4. Calculate the historical P/L for the portfolio
+        # We do this by multiplying the daily returns of each stock by its
+        # dollar value in the portfolio. This gives us the daily P/L for each asset.
+        # Then we sum across the rows to get the total portfolio P/L for each day.
+        historical_pl = (returns * weights).sum(axis=1)
+        
+        # 5. Find the VaR
+        # The VaR is the quantile of the historical P/L distribution.
+        # For a 95% confidence level, we're looking for the 5th percentile.
+        var_value = -historical_pl.quantile(1 - confidence_level)
+        
+        return var_value, historical_pl.tolist()

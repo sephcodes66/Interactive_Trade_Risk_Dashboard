@@ -1,25 +1,46 @@
-# RiskDash - User Acceptance Testing (UAT)
+# How I Approached Testing
 
-This document outlines the User Acceptance Testing (UAT) cases for the RiskDash prototype. The purpose of these tests is to verify that the application meets the business requirements and functions correctly from an end-user's perspective.
+Testing for a project like this is a mix of automated checks and just playing around with the UI to make sure it feels right. Here's a quick rundown of how I made sure RiskDash wasn't completely broken.
 
-## Test Scenarios
+## Backend Unit Tests (`pytest`)
 
-| Test Case ID | Test Scenario | Action Steps | Expected Result |
-|---|---|---|---|
-| **UAT-01** | **Analyze a Tech-Heavy Portfolio** | 1. Launch the application. <br> 2. From the "Select stocks" dropdown, choose `AAPL`, `MSFT`, and `TSLA`. <br> 3. In the input boxes that appear, enter `50` for AAPL, `30` for MSFT, and `20` for TSLA. <br> 4. Click "Analyze Portfolio". | The dashboard updates to show the analysis. All four sections (Key Risk Metrics, Risk Concentration, P/L Simulation, and Historical Performance) are displayed with calculated values. The pie chart shows the three stocks with their respective weights. |
-| **UAT-02** | **Analyze a Diversified Portfolio** | 1. Launch the application. <br> 2. Select `VTI` (a stock ETF) and `AGG` (a bond ETF). <br> 3. Enter `60` for VTI and `40` for AGG. <br> 4. Click "Analyze Portfolio". | The dashboard updates. The calculated VaR should be relatively low compared to the tech-heavy portfolio, demonstrating the risk-reducing effect of diversification. All charts are displayed correctly. |
-| **UAT-03** | **Handle a Stock with Missing Data** | 1. Launch the application. <br> 2. Select a single, less common stock that might have incomplete data (e.g., `AIEQ`). <br> 3. Enter a quantity of `100`. <br> 4. Click "Analyze Portfolio". | The application remains stable. If a chart cannot be generated due to insufficient data, a message like "Historical performance chart could not be generated" is displayed in its place, but the rest of the analysis (like VaR) is still shown. The app does not crash. |
-| **UAT-04** | **Dynamically Update Portfolio** | 1. Perform the analysis for any portfolio. <br> 2. Remove one stock from the "Select stocks" dropdown. <br> 3. Click "Analyze Portfolio" again. | The dashboard updates correctly. The removed stock and its quantity input disappear. The analysis results are recalculated for the new, smaller portfolio. |
-| **UAT-05** | **Invalid Input (No Quantity)** | 1. Launch the application. <br> 2. Select one or more stocks. <br> 3. Do not enter any quantities. <br> 4. Click "Analyze Portfolio". | A user-friendly error message like "Please enter a quantity for at least one stock" is displayed in red text. No analysis is performed. |
+The most critical part of this project is the risk calculation engine. If that's wrong, the whole thing is useless. So, I spent most of my "formal" testing time here.
 
----
+I used `pytest` to write unit tests for the core backend logic:
+*   **`test_risk_engine.py`:** This is the big one. I wrote tests to make sure the VaR calculation was correct for a simple, predictable dataset. I also tested the profit/loss simulation logic.
+*   **`test_portfolio.py`:** These tests check the `Portfolio` class. I wanted to make sure it correctly calculated market values and handled different portfolio compositions.
+*   **`test_api.py`:** I wrote a few tests to check the Flask API endpoints. These tests make sure the API returns the right data structure and handles bad inputs gracefully (e.g., sending a request with no stocks).
 
-## Acceptance Criteria
+To run them, just fire up `pytest` in the terminal.
 
-This section defines the acceptance criteria for the major components of the application.
+## "Eyeball" Testing the Dashboard
 
-| Feature ID | Feature Name | Acceptance Criteria |
-|---|---|---|
-| **AC-01** | **REST API** | 1. A `POST` request to `/api/risk` with a valid portfolio returns a `200 OK` status. <br> 2. The response body contains `total_market_value`, `var`, `market_values_per_stock`, `simulated_pl`, and `historical_performance`. <br> 3. A request with an empty or invalid portfolio returns a `400 Bad Request` status with a clear error message. |
-| **AC-02** | **Interactive Dashboard** | 1. The dashboard loads at the `/dash/` URL without errors. <br> 2. Selecting stocks dynamically generates the correct number of quantity input boxes. <br> 3. Clicking "Analyze Portfolio" with a valid portfolio displays the full results section with four distinct analysis cards. <br> 4. The "Risk Concentration" card shows a pie chart. <br> 5. The "Profit/Loss Simulation" card shows a smoothed density plot. |
-| **AC-03** | **Automated Report** | 1. Running the `src/automate_report.py` script executes without errors. <br> 2. The script generates a file at `reports/daily_risk_report.md`. <br> 3. The generated report is well-formatted and contains the calculated VaR and Market Value. |
+For the frontend, my testing was much more informal. I basically just tried to break it. Here are some of the scenarios I ran through manually:
+
+*   **The "Does it even work?" Test:**
+    1.  Pick a few stocks (usually `AAPL`, `MSFT`, `TSLA`).
+    2.  Enter some quantities.
+    3.  Click "Analyze Portfolio."
+    4.  Expected: The dashboard updates and shows me some numbers and charts. Success!
+
+*   **The "What if I change my mind?" Test:**
+    1.  Analyze a portfolio.
+    2.  Remove a stock from the dropdown.
+    3.  Click "Analyze" again.
+    4.  Expected: The dashboard updates correctly, showing the analysis for the new, smaller portfolio.
+
+*   **The "Fat Finger" Test (Invalid Inputs):**
+    1.  Select a stock but don't enter a quantity.
+    2.  Click "Analyze."
+    3.  Expected: I should see a friendly error message, not a scary crash.
+
+*   **The "Weird Stock" Test:**
+    1.  Pick a less common stock that might have spotty data.
+    2.  Analyze it.
+    3.  Expected: The app should handle it gracefully. Maybe a chart won't load, but the rest of the app should still work.
+
+This manual approach felt right for a small project. It's quick, intuitive, and helps me get a feel for the user experience in a way that automated tests can't.
+
+## Known Gaps
+
+I know my testing isn't exhaustive. For example, I haven't done any serious performance testing with huge portfolios. But for a prototype, I'm confident that the core logic is solid and the UI is reasonably stable.

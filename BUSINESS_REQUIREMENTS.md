@@ -1,46 +1,29 @@
-# Business Requirements: RiskDash (An Interactive Risk Analysis Tool)
+# Project Goals: What I'm Building Here
 
-## 1. Introduction
+This file is basically my personal checklist and brain-dump for what I wanted to accomplish with this RiskDash project. It started as a simple idea and grew from there.
 
-This document outlines the high-level business requirements for the RiskDash system. The primary goal of RiskDash is to provide a modern, efficient, and accessible platform for the Group Risk Management team to analyze portfolio risk, visualize data, and automate reporting.
+## The Big Idea
 
-## 2. Project Goals & Objectives
+The main goal was to build something that could answer a seemingly simple question: **"How much money could my stock portfolio lose on a bad day?"**
 
-- **Improve Efficiency:** Reduce the manual effort required to perform daily risk calculations and generate reports.
-- **Enhance Accessibility:** Provide a user-friendly web interface for risk analysis, making it accessible to non-technical users.
-- **Standardize Risk Calculation:** Implement a consistent and verifiable method for calculating historical Value at Risk (VaR).
-- **Provide Actionable Insights:** Offer clear visualizations of portfolio composition and risk exposure.
-- **Enable System Integration:** Create an API to allow other internal systems to leverage the risk engine's capabilities.
+I knew the answer was related to the "Value at Risk" (VaR) metric, but I wanted to build a tool that made it tangible. I didn't want to just calculate a number; I wanted to see it, interact with it, and understand it.
 
-## 3. Scope
+## My Core Feature Wishlist:
 
-### 3.1. In-Scope Features
+*   **A Way to Build a Portfolio:** I needed a simple UI where I could pick a few stocks (like AAPL, GOOGL, etc.) and say how many shares I "owned."
+*   **Calculate Historical VaR:** This was the heart of the project. The tool had to take my portfolio, look at past price movements, and calculate the 1-day 95% VaR.
+*   **Visualize the Risk:** A single number is boring. I wanted charts!
+    *   A pie chart to see how my portfolio was allocated.
+    *   A distribution plot (a density chart) to visualize the range of potential profits and losses. This is way more intuitive than just a number.
+*   **A Simple API:** I wanted the calculation engine to be separate from the UI. This way, I could theoretically use it for other things later. A simple Flask API seemed like the perfect fit.
+*   **Automated Report:** I thought it would be cool to have a script that could generate a daily risk report in a simple format like Markdown.
 
-- **Core Risk Calculation:** A risk engine capable of calculating 1-day historical VaR at a 95% confidence level.
-- **Portfolio Management:** Ability to define and analyze a portfolio of stocks.
-- **Data Ingestion:** Process historical stock price data from a provided data source.
-- **API:** A RESTful API that accepts a portfolio and returns key risk metrics.
-- **Interactive Dashboard:** A web-based dashboard to:
-    - Input a portfolio.
-    - Display calculated risk metrics (VaR, Market Value).
-    - Visualize portfolio composition.
-- **Automated Reporting:** A script to automatically generate a daily summary risk report for a predefined portfolio.
+## What I'm NOT Building (At Least Not Yet)
 
-### 3.2. Out-of-Scope Features (for this version)
+To keep things manageable for a first version, I decided to leave a few things out:
 
-- Real-time data feeds.
-- Advanced risk models (e.g., Monte Carlo VaR, Stress Testing).
-- User authentication and management.
-- Saving and managing multiple portfolios per user.
-- Direct integration with external data providers.
+*   **Real-time data:** This is a prototype, so I'm using a static dataset of historical prices.
+*   **Fancy risk models:** I'm sticking to Historical VaR for now. No Monte Carlo simulations or stress testing... yet.
+*   **User accounts:** There's no login or way to save your portfolio. It's all in-the-moment analysis.
 
-## 4. Functional Requirements
-
-| ID | Requirement | Description |
-|---|---|---|
-| **FR-01** | Calculate Historical VaR | The system must calculate the 1-day, 95% confidence historical VaR for a given stock portfolio. |
-| **FR-02** | Calculate Market Value | The system must calculate the total current market value of a given portfolio. |
-| **FR-03** | API Access | The system must expose an API endpoint that takes a portfolio definition and returns the VaR and market value. |
-| **FR-04** | Interactive Dashboard | The user shall be able to input a portfolio into a web dashboard and view the calculated risk metrics and a portfolio composition chart. |
-| **FR-05** | Automated Report | The system must be able to generate a daily risk report in Markdown format for a predefined sample portfolio. |
-
+This project is all about learning and building a cool, practical tool. If you have ideas for how to make it better, feel free to share them!

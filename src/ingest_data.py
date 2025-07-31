@@ -1,110 +1,105 @@
+"""
+A one-off script to populate the database with some sample data.
+
+I put this together to get the project up and running with a realistic dataset.
+It reads from the CSV files in the `data/archive/` directory, which I downloaded
+from Kaggle, and loads the data into our PostgreSQL database.
+
+It's designed to be run once during the initial setup.
+"""
 import os
-import pandas as pd
-from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
 import glob
+import pandas as pd
+from sqlalchemy import create_engine
+from dotenv import load_dotenv
+
+# Load environment variables from .env file (for the database connection)
+load_dotenv()
+
+def get_db_engine():
+    """Creates a SQLAlchemy engine from the environment variables."""
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise ValueError("DATABASE_URL is not set in the .env file!")
+    
+    # The 'echo=False' means it won't log every single SQL statement.
+    # It can be noisy, but useful for debugging if something goes wrong.
+    return create_engine(db_url, echo=False)
 
 def create_tables(engine):
+    """Creates the database tables based on the models."""
+    # This is a bit of a hack to get the models loaded.
+    # It relies on the fact that our models are defined in src/models.py
+    from src.models import Base
+    print("Creating database tables if they don't exist...")
+    Base.metadata.create_all(engine)
+    print("Tables created successfully (or already exist).")
+
+def ingest_stock_data(engine):
     """
-    Creates the database tables and indexes if they do not already exist.
-    Indexes are crucial for query performance on large datasets.
+    Finds all the stock CSV files, processes them, and bulk-inserts them.
     """
-    with engine.connect() as conn:
-        with conn.begin():
-            conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS instruments (
-                instrument_id SERIAL PRIMARY KEY,
-                ticker VARCHAR(20) UNIQUE NOT NULL,
-                company_name VARCHAR(255)
-            );
-            """))
-            conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS market_data (
-                data_id SERIAL PRIMARY KEY,
-                instrument_id INTEGER REFERENCES instruments(instrument_id),
-                price_date DATE NOT NULL,
-                open_price NUMERIC(10, 2),
-                high_price NUMERIC(10, 2),
-                low_price NUMERIC(10, 2),
-                close_price NUMERIC(10, 2) NOT NULL,
-                volume NUMERIC,
-                UNIQUE(instrument_id, price_date)
-            );
-            """))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_market_data_instrument_id ON market_data (instrument_id);"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_market_data_price_date ON market_data (price_date);"))
-    print("Tables and indexes checked/created successfully.")
+    print("\nStarting stock data ingestion...")
+    
+    # The data is split into a bunch of CSVs, one for each stock.
+    path = 'data/archive/stocks'
+    all_files = glob.glob(os.path.join(path, "*.csv"))
+    
+    all_stocks_df = []
+    total_files = len(all_files)
 
-def ingest_data(engine):
-    """
-    Finds all CSV files in the data directory, cleans the data,
-    and efficiently loads it into the database.
-    """
-    stock_files = glob.glob('data/archive/stocks/*.csv')
-    etf_files = glob.glob('data/archive/etfs/*.csv')
-    all_files = sorted(list(set(stock_files + etf_files)))
-    print(f"Found {len(all_files)} data files to ingest.")
+    for i, filename in enumerate(all_files):
+        try:
+            df = pd.read_csv(filename)
+            # The ticker is in the filename, so we have to extract it.
+            ticker = os.path.basename(filename).split('.')[0]
+            df['ticker'] = ticker
+            all_stocks_df.append(df)
+            
+            # A little progress indicator so we know it's not stuck.
+            if (i + 1) % 100 == 0:
+                print(f"  Processed {i + 1}/{total_files} files...")
 
-    with engine.connect() as conn:
-        with conn.begin():
-            for filepath in all_files:
-                ticker = os.path.splitext(os.path.basename(filepath))[0]
-                print(f"Processing {ticker}...")
+        except Exception as e:
+            print(f"  Could not process file {filename}. Error: {e}")
 
-                instrument_id_result = conn.execute(
-                    text("INSERT INTO instruments (ticker, company_name) VALUES (:ticker, :name) ON CONFLICT (ticker) DO UPDATE SET ticker=EXCLUDED.ticker RETURNING instrument_id"),
-                    {"ticker": ticker, "name": ticker}
-                ).fetchone()
-                instrument_id = instrument_id_result[0]
+    print(f"  Processed a total of {total_files} files.")
+    
+    if not all_stocks_df:
+        print("  No stock data found to ingest.")
+        return
 
-                df = pd.read_csv(filepath)
-                df.rename(columns={
-                    'Date': 'price_date', 'Open': 'open_price', 'High': 'high_price', 
-                    'Low': 'low_price', 'Close': 'close_price', 'Volume': 'volume'
-                }, inplace=True)
-                
-                df['instrument_id'] = instrument_id
-                df['price_date'] = pd.to_datetime(df['price_date'])
-                df_to_insert = df[['instrument_id', 'price_date', 'open_price', 'high_price', 'low_price', 'close_price', 'volume']]
-                
-                df_to_insert = df_to_insert.where(pd.notnull(df_to_insert), None)
-                data_to_insert = df_to_insert.to_dict(orient='records')
-
-                if data_to_insert:
-                    conn.execute(
-                        text("""
-                            INSERT INTO market_data (instrument_id, price_date, open_price, high_price, low_price, close_price, volume)
-                            VALUES (:instrument_id, :price_date, :open_price, :high_price, :low_price, :close_price, :volume)
-                            ON CONFLICT (instrument_id, price_date) DO NOTHING;
-                        """),
-                        data_to_insert
-                    )
-    print(f"\nData ingestion complete.")
+    # Combine all the individual dataframes into one big one.
+    full_df = pd.concat(all_stocks_df, ignore_index=True)
+    
+    # Clean up the column names to match our database schema.
+    full_df.rename(columns={
+        'Date': 'date',
+        'Open': 'open',
+        'High': 'high',
+        'Low': 'low',
+        'Close': 'close',
+        'Volume': 'volume'
+    }, inplace=True)
+    
+    # Make sure the date is in the right format.
+    full_df['date'] = pd.to_datetime(full_df['date'])
+    
+    print(f"  Concatenated all data into a single DataFrame with {len(full_df)} rows.")
+    print("  Now writing to the 'historical_prices' table... (this might take a minute)")
+    
+    # Use `to_sql` for a fast bulk insert.
+    full_df.to_sql('historical_prices', engine, if_exists='replace', index=False, chunksize=1000)
+    
+    print("  Stock data ingestion complete!")
 
 def main():
-    """Main function to connect to the database and run the setup."""
-    load_dotenv()
-    try:
-        db_user = os.getenv("DB_USER")
-        db_password = os.getenv("DB_PASSWORD")
-        db_host = os.getenv("DB_HOST")
-        db_port = os.getenv("DB_PORT")
-        db_name = os.getenv("DB_NAME")
-        
-        if not all([db_user, db_host, db_port, db_name]):
-            print("Error: Database credentials are not fully set in the .env file.")
-            return
-
-        engine = create_engine(f'postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}')
-        print("Database connection successful.")
-        
-        create_tables(engine)
-        ingest_data(engine)
-
-        engine.dispose()
-        print("Database connection closed.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    """The main function to run the whole ingestion process."""
+    print("--- Starting Data Ingestion ---")
+    engine = get_db_engine()
+    create_tables(engine)
+    ingest_stock_data(engine)
+    print("\n--- Data Ingestion Finished ---")
 
 if __name__ == "__main__":
     main()

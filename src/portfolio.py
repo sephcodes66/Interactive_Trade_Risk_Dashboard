@@ -1,72 +1,67 @@
-from sqlalchemy import func
-from sqlalchemy.orm import sessionmaker
-from src import get_engine
-from src.models import Instrument, MarketData
+from sqlalchemy.orm import Session
+from .models import HistoricalPrice, get_db
 
 class PortfolioManager:
     """
-    Manages a portfolio of stocks, including fetching current prices
-    and calculating market value using the SQLAlchemy ORM.
+    Handles all the logic related to a user's portfolio, like fetching
+    prices and calculating market values.
     """
-    def __init__(self, portfolio_dict: dict):
+    def __init__(self, portfolio: dict[str, int]):
         """
-        Initializes the PortfolioManager.
+        Initializes the PortfolioManager with a portfolio.
+
+        Args:
+            portfolio: A dictionary where keys are stock tickers (e.g., "AAPL")
+                       and values are the number of shares.
         """
-        if not isinstance(portfolio_dict, dict):
-            raise TypeError("Portfolio must be a dictionary of ticker symbols and quantities.")
-        self.portfolio = portfolio_dict
-        self.engine = get_engine()
-        self.Session = sessionmaker(bind=self.engine)
+        if not isinstance(portfolio, dict) or not portfolio:
+            raise ValueError("Portfolio must be a non-empty dictionary.")
+            
+        self.portfolio = portfolio
+        self.tickers = list(portfolio.keys())
+        self.db_session: Session = next(get_db())
+        
+        # These will be populated by the methods below.
+        self.current_prices = {}
         self.market_values = {}
 
-    def get_current_prices(self) -> dict:
+    def get_current_prices(self) -> dict[str, float]:
         """
-        Fetches the most recent price for each ticker in the portfolio.
+        Fetches the most recent closing price for each stock in the portfolio.
         
-        This is a more "human" or iterative way of solving the problem. A developer might write this first
-        before realizing it's inefficient and then optimizing it to the more complex subquery version.
-        This version is easier to read but makes a separate database query for every single ticker.
+        TODO: This is a classic N+1 query problem. It's fine for a small number
+        of tickers, but if the portfolio gets big, this will be slow.
+        A better way would be to fetch all prices in a single query.
         """
         prices = {}
-        tickers = list(self.portfolio.keys())
-        if not tickers:
-            return prices
-
-        session = self.Session()
-        try:
-            for ticker in tickers:
-                # For each ticker, find the latest price.
-                latest_price_query = session.query(
-                    MarketData.close_price
-                ).join(
-                    Instrument, Instrument.instrument_id == MarketData.instrument_id
-                ).filter(
-                    Instrument.ticker == ticker
-                ).order_by(
-                    MarketData.price_date.desc()
-                ).first()
-
-                if latest_price_query:
-                    prices[ticker] = latest_price_query[0]
-                else:
-                    print(f"Warning: Could not find price data for ticker '{ticker}'. It will be ignored.")
-        finally:
-            session.close()
+        for ticker in self.tickers:
+            # For each ticker, we query the database for the most recent price record.
+            result = self.db_session.query(HistoricalPrice.close)\
+                .filter(HistoricalPrice.ticker == ticker)\
+                .order_by(HistoricalPrice.date.desc())\
+                .first()
+            
+            if result:
+                prices[ticker] = result[0]
         
+        self.current_prices = prices
         return prices
 
     def calculate_total_market_value(self) -> float:
         """
-        Calculates the total market value of the portfolio.
+        Calculates the total market value of the entire portfolio.
+        It needs to fetch the current prices first.
         """
-        current_prices = self.get_current_prices()
+        self.get_current_prices()
+        
         total_value = 0.0
-
         for ticker, quantity in self.portfolio.items():
-            if ticker in current_prices:
-                price = float(current_prices[ticker])
-                value = price * quantity
-                self.market_values[ticker] = value
-                total_value += value
+            price = self.current_prices.get(ticker)
+            if price is not None:
+                # If we found a price, we calculate the market value for this stock
+                # and add it to our running total.
+                market_value = price * quantity
+                self.market_values[ticker] = market_value
+                total_value += market_value
         
         return total_value
