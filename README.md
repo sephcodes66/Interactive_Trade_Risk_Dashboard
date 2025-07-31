@@ -4,7 +4,6 @@ This project started as a personal challenge: I wanted to see if I could build a
 
 The goal was to create an interactive web dashboard that could help me (and hopefully others!) visualize the market risk of a stock portfolio. It's one thing to read about VaR in a textbook, but it's another to build a tool that calculates it for you.
 
-> **A quick note:** I built this with the help of an AI assistant. It was a cool experiment in human-AI collaboration, where I handled the high-level design and problem-solving, and the AI helped with some of the boilerplate code. For a deeper dive into the "why" behind some of my technical decisions, check out the [[DESIGN_CHOICES.md]] file.
 
 ![Dashboard Screenshot](./screenshots/ss_1.png)
 
