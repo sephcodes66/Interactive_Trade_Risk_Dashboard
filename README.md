@@ -6,6 +6,8 @@ The goal was to create an interactive web dashboard that could help me (and hope
 
 
 ![Dashboard Screenshot](./screenshots/ss_1.png)
+![Dashboard Screenshot](./screenshots/ss_2.png)
+
 
 ## So, What Can It Do?
 
